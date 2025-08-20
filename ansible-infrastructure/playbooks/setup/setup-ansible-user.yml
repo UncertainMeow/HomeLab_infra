@@ -1,0 +1,51 @@
+---
+- name: Create proper ansible user on Proxmox
+  hosts: proxmox
+  remote_user: root
+  gather_facts: no
+  vars:
+    # Get this from: ssh-add -L | grep cogito
+    ansible_ssh_public_key: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICsDyKQ8SMOJbzWGBiEf0K+uqMrBxTiDceqT3mMNgsSZ cogito"
+  
+  tasks:
+    - name: Create ansible user
+      user:
+        name: ansible
+        shell: /bin/bash
+        create_home: yes
+        groups: sudo
+        append: yes
+        state: present
+
+    - name: Create SSH directory for ansible user
+      file:
+        path: /home/ansible/.ssh
+        state: directory
+        owner: ansible
+        group: ansible
+        mode: '0700'
+
+    - name: Add SSH public key for ansible user
+      authorized_key:
+        user: ansible
+        key: "{{ ansible_ssh_public_key }}"
+        state: present
+        exclusive: yes
+
+    - name: Configure passwordless sudo for ansible user
+      lineinfile:
+        path: /etc/sudoers.d/ansible
+        create: yes
+        line: 'ansible ALL=(ALL) NOPASSWD:ALL'
+        mode: '0440'
+        validate: 'visudo -cf %s'
+
+    - name: Test sudo access
+      become: yes
+      become_user: ansible
+      command: whoami
+      register: sudo_test
+
+    - name: Display sudo test result
+      debug:
+        msg: "Ansible user sudo test: {{ sudo_test.stdout }}"

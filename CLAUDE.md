@@ -1,0 +1,191 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Project Overview
+
+This is an Ansible-based infrastructure automation project for managing a Proxmox homelab with AI/ML capabilities. The project uses 1Password SSH Agent for secure key management and focuses on automating setup, maintenance, and deployment of AI workloads.
+
+## Core Architecture
+
+### Directory Structure
+- **Root level**: Basic playbooks for quick operations (`gather-facts.yml`, `update-packages.yml`, `proxmox-maintenance.yml`, `setup-ansible-user.yml`)
+- **ansible-infrastructure/**: Main collection with organized structure
+  - `playbooks/`: Categorized playbooks (setup, maintenance, deployment, monitoring)
+  - `roles/`: Custom roles (common, ssh_hardening, user_management, proxmox)
+  - `inventory/`: Host and group configurations
+  - `collections/`: Custom Ansible collection at `kellen.infrastructure`
+
+### Key Configuration Files
+- **ansible-infrastructure/ansible.cfg**: Single centralized configuration with collection support
+- **ansible-infrastructure/inventory/hosts.yml**: Comprehensive inventory with groups (proxmox, ai_workers, monitoring)
+
+## Essential Commands
+
+### Prerequisites Check
+```bash
+# Run automated environment check (from ansible-infrastructure/)
+./scripts/quick-setup.sh
+
+# Verify 1Password SSH agent
+ssh-add -l
+
+# Test SSH connectivity manually
+ssh -F ~/.ssh/config-proxmox ansible@socrates
+```
+
+### Testing and Validation
+```bash
+# Test connectivity to all hosts
+ansible all -m ping
+
+# Validate full configuration (from ansible-infrastructure/)
+ansible-playbook tests/validate-setup.yml
+
+# Dry run with changes preview
+ansible-playbook site.yml --check --diff
+
+# Check configuration dump
+ansible-config dump
+```
+
+### Main Operations
+```bash
+# All operations from ansible-infrastructure/ directory
+cd ansible-infrastructure
+
+# Full infrastructure deployment
+ansible-playbook site.yml
+
+# Initial server setup (for new hosts, run as root initially)
+ansible-playbook playbooks/setup/initial-setup.yml -u root --ask-pass
+
+# System maintenance
+ansible-playbook playbooks/maintenance/proxmox-maintenance.yml
+ansible-playbook playbooks/maintenance/system-update.yml
+ansible-playbook playbooks/maintenance/gather-facts.yml
+ansible-playbook playbooks/maintenance/update-packages.yml
+
+# Hardware assessment for AI workloads
+ansible-playbook playbooks/maintenance/hardware-assessment.yml
+
+# AI/ML deployment pipeline
+ansible-playbook playbooks/deployment/docker-setup.yml
+ansible-playbook playbooks/deployment/ollama-setup.yml
+```
+
+### User Management
+```bash
+# Set up automation users with SSH keys (run as root initially)
+ansible-playbook playbooks/setup/setup-ansible-user.yml -u root
+
+# User management from collection
+ansible-playbook playbooks/setup/user-management.yml
+```
+
+### Debugging and Troubleshooting
+```bash
+# Check service status across hosts
+ansible all -m systemd -a "name=docker state=started"
+
+# Verify sudo access
+ansible all -m shell -a "sudo whoami"
+
+# Gather system facts
+ansible all -m setup | grep ansible_distribution
+
+# Run single task with verbose output
+ansible-playbook site.yml -v --tags "docker"
+```
+
+## Authentication & Security
+
+### 1Password SSH Agent Integration
+- SSH authentication uses 1Password SSH Agent exclusively
+- SSH config at `~/.ssh/config-proxmox` contains host-specific settings
+- Environment variable: `SSH_AUTH_SOCK=~/Library/Group\ Containers/2BUA8C4S2C.com.1password/t/agent.sock`
+- Get keys: `ssh-add -L` or `ssh-add -l`
+
+### User Roles
+- **kellen**: Interactive user with sudo (password required)
+- **tinker**: Automation user with NOPASSWD sudo for Ansible
+- **ansible**: Default remote_user set in ansible.cfg
+
+### Security Features
+- SSH hardening (disable root login, password auth)
+- Public key authentication only
+- UFW firewall rules and fail2ban
+- Secure SSH timeouts and connection settings
+
+## Development Patterns
+
+### Inventory Management
+- Use hierarchical variable structure: all.yml → group_vars → host_vars → role vars
+- Group structure: proxmox (virtualization) → ai_workers (ML workloads) → monitoring
+- Host-specific configs in `host_vars/` (e.g., socrates.yml for main AI workstation)
+
+### Role Development
+```bash
+# Create new role
+ansible-galaxy init roles/role-name
+
+# Role dependencies in meta/main.yml
+# Variables in defaults/main.yml
+# Tasks in tasks/main.yml
+# Handlers in handlers/main.yml
+```
+
+### Collection Structure
+- Custom collection: `collections/ansible_collections/kellen/infrastructure/`
+- Roles path includes both local roles and collection roles: `roles:collections/ansible_collections/kellen/infrastructure/roles`
+- Collection path configured: `collections_path = collections` in ansible.cfg
+- Master playbook: `site.yml` imports setup → maintenance → hardware assessment
+
+### Migration Patterns
+- Use `migrate-to-new-structure.sh` for transitioning legacy configurations
+- Dual ansible.cfg pattern: root for quick ops, ansible-infrastructure/ for comprehensive collection work
+- Legacy playbooks remain at root level for backward compatibility
+
+## Hardware Assessment & AI/ML
+
+The project includes automated hardware assessment specifically for AI/ML workloads:
+- CPU instruction sets (AVX, AVX2, FMA)
+- Memory capacity for model sizing
+- GPU detection and VRAM analysis
+- Storage performance recommendations
+
+Supported AI frameworks: Ollama (local LLM), Docker (containerized AI), NVIDIA Container Toolkit, Jupyter Lab.
+
+## Working Directory Context
+
+When operating in this repository:
+- **Always work from `ansible-infrastructure/` directory** - this contains the centralized ansible.cfg and inventory
+- All playbooks and commands should be run from this location
+- The project uses a single configuration approach for consistency and maintainability
+
+## Development and Testing Workflow
+
+### Environment Setup Validation
+```bash
+# From ansible-infrastructure/ - comprehensive check
+./scripts/quick-setup.sh
+
+# Quick connectivity test
+ansible all -m ping --one-line
+```
+
+### Variable Debugging
+```bash
+# Show all variables for a host
+ansible-inventory --host socrates --yaml
+
+# List all hosts in a group
+ansible all --list-hosts
+ansible ai_workers --list-hosts
+```
+
+### Performance and Optimization
+- Uses smart gathering with memory caching (24h timeout)
+- Pipelining enabled for faster execution
+- 10 parallel forks configured
+- Control persist for SSH connection reuse

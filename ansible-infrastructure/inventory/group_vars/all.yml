@@ -1,0 +1,38 @@
+---
+# Global variables for all hosts
+
+# Common packages to install on all systems
+common_packages:
+  - curl
+  - wget
+  - git
+  - htop
+  - tmux
+  - vim
+  - unzip
+  - jq
+  - python3-pip
+
+# SSH configuration
+ssh_config:
+  permit_root_login: no
+  password_authentication: no
+  pubkey_authentication: yes
+  challenge_response_authentication: no
+  use_pam: yes
+  x11_forwarding: no
+  client_alive_interval: 300
+  client_alive_count_max: 2
+
+# Security settings
+security:
+  fail2ban_enabled: true
+  ufw_enabled: true
+  automatic_updates: true
+  
+# Timezone and locale
+system_timezone: "America/New_York"
+system_locale: "en_US.UTF-8"
+
+# Logging
+log_retention_days: 30

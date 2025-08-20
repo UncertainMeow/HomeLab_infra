@@ -1,0 +1,124 @@
+---
+- name: Validate infrastructure setup and configuration
+  hosts: all
+  gather_facts: yes
+  become: yes
+  
+  tasks:
+    - name: Test basic connectivity
+      ping:
+      
+    - name: Verify ansible user exists
+      user:
+        name: ansible
+        state: present
+      check_mode: yes
+      register: ansible_user_check
+      
+    - name: Verify SSH key authentication
+      command: ssh-add -l
+      delegate_to: localhost
+      run_once: true
+      register: ssh_keys
+      changed_when: false
+      
+    - name: Test sudo access
+      command: whoami
+      become: yes
+      register: sudo_test
+      changed_when: false
+      
+    - name: Check required packages
+      package_facts:
+        
+    - name: Verify common packages installed
+      assert:
+        that:
+          - "'curl' in ansible_facts.packages"
+          - "'git' in ansible_facts.packages"
+          - "'python3-pip' in ansible_facts.packages"
+        fail_msg: "Required common packages are missing"
+        success_msg: "All required packages are installed"
+        
+    - name: Check SSH configuration
+      slurp:
+        src: /etc/ssh/sshd_config
+      register: ssh_config
+      
+    - name: Verify SSH security settings
+      assert:
+        that:
+          - "'PermitRootLogin no' in (ssh_config.content | b64decode)"
+          - "'PasswordAuthentication no' in (ssh_config.content | b64decode)"
+        fail_msg: "SSH configuration is not secure"
+        success_msg: "SSH security settings are correct"
+        
+    - name: Check system services
+      service_facts:
+        
+    - name: Verify critical services are running
+      assert:
+        that:
+          - "ansible_facts.services['ssh.service'].state == 'running'"
+          - "ansible_facts.services['systemd-resolved.service'].state == 'running'"
+        fail_msg: "Critical system services are not running"
+        success_msg: "All critical services are running"
+        
+    - name: Test network connectivity
+      uri:
+        url: https://google.com
+        method: GET
+        timeout: 10
+      register: network_test
+      
+    - name: Generate validation report
+      copy:
+        content: |
+          INFRASTRUCTURE VALIDATION REPORT
+          ===============================
+          Generated: {{ ansible_date_time.iso8601 }}
+          Host: {{ inventory_hostname }}
+          
+          CONNECTIVITY TESTS:
+          ✅ SSH Connectivity: PASS
+          ✅ Sudo Access: {{ 'PASS' if sudo_test.stdout == 'root' else 'FAIL' }}
+          ✅ Network Connectivity: {{ 'PASS' if network_test.status == 200 else 'FAIL' }}
+          
+          USER CONFIGURATION:
+          ✅ Ansible User: {{ 'EXISTS' if not ansible_user_check.changed else 'MISSING' }}
+          ✅ SSH Keys: {{ ssh_keys.stdout_lines | length }} keys available
+          
+          SYSTEM CONFIGURATION:
+          ✅ OS: {{ ansible_distribution }} {{ ansible_distribution_version }}
+          ✅ Kernel: {{ ansible_kernel }}
+          ✅ Python: {{ ansible_python_version }}
+          ✅ Architecture: {{ ansible_architecture }}
+          
+          SECURITY STATUS:
+          ✅ SSH Root Login: {{ 'DISABLED' if 'PermitRootLogin no' in (ssh_config.content | b64decode) else 'ENABLED' }}
+          ✅ SSH Password Auth: {{ 'DISABLED' if 'PasswordAuthentication no' in (ssh_config.content | b64decode) else 'ENABLED' }}
+          
+          SERVICE STATUS:
+          {% for service in ['ssh.service', 'systemd-resolved.service'] %}
+          ✅ {{ service }}: {{ ansible_facts.services[service].state | upper }}
+          {% endfor %}
+          
+          HARDWARE SUMMARY:
+          - CPU: {{ ansible_processor_vcpus }} vCPUs
+          - Memory: {{ (ansible_memtotal_mb / 1024) | round(1) }} GB
+          - Storage: {{ ansible_devices.keys() | list | length }} devices
+          
+          VALIDATION: {{ 'PASSED' if sudo_test.stdout == 'root' and network_test.status == 200 else 'FAILED' }}
+        dest: "/tmp/validation-report-{{ inventory_hostname }}.txt"
+        
+    - name: Display validation summary
+      debug:
+        msg: |
+          🧪 Validation completed for {{ inventory_hostname }}
+          
+          ✅ Basic Tests:
+          - SSH Connectivity: PASS  
+          - Sudo Access: {{ 'PASS' if sudo_test.stdout == 'root' else 'FAIL' }}
+          - Network: {{ 'PASS' if network_test.status == 200 else 'FAIL' }}
+          
+          📋 Report saved to: /tmp/validation-report-{{ inventory_hostname }}.txt

@@ -1,0 +1,49 @@
+---
+# Common system setup tasks
+
+- name: Update apt cache
+  apt:
+    update_cache: yes
+    cache_valid_time: 3600
+  when: ansible_os_family == "Debian"
+
+- name: Install common packages
+  package:
+    name: "{{ common_packages }}"
+    state: present
+
+- name: Set timezone
+  timezone:
+    name: "{{ system_timezone }}"
+  notify: restart rsyslog
+
+- name: Set locale
+  locale_gen:
+    name: "{{ system_locale }}"
+    state: present
+  when: ansible_os_family == "Debian"
+
+- name: Configure log rotation
+  template:
+    src: logrotate.conf.j2
+    dest: /etc/logrotate.conf
+    backup: yes
+  notify: restart rsyslog
+
+- name: Ensure log directories exist
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0755'
+  loop:
+    - /var/log/ansible
+    - /var/log/applications
+
+- name: Configure system performance settings
+  sysctl:
+    name: "{{ item.name }}"
+    value: "{{ item.value }}"
+    state: present
+    reload: yes
+  loop: "{{ system_sysctl_settings | default([]) }}"
+  when: system_sysctl_settings is defined

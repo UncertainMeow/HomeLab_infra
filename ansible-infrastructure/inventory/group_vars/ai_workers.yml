@@ -1,0 +1,49 @@
+---
+# AI/ML worker node configuration
+
+# NVIDIA GPU settings
+nvidia:
+  driver_version: "latest"
+  cuda_version: "12.6"
+  docker_runtime: nvidia
+  
+# AI/ML software stack
+ai_software:
+  ollama:
+    enabled: true
+    port: 11434
+    models_path: "/opt/ollama/models"
+    
+  jupyter:
+    enabled: true
+    port: 8888
+    password_hash: ""  # Set in host_vars or vault
+    
+  vscode_server:
+    enabled: true
+    port: 8080
+    
+  monitoring:
+    nvidia_smi_exporter: true
+    gpu_metrics_port: 9835
+
+# Container runtime
+containers:
+  engine: docker
+  compose_version: "2.21.0"
+  registries:
+    - "docker.io"
+    - "ghcr.io"
+    - "quay.io"
+
+# Storage for AI workloads  
+ai_storage:
+  models_path: "/opt/ai/models"
+  datasets_path: "/opt/ai/datasets"
+  workspace_path: "/opt/ai/workspace"
+  
+# Memory and performance tuning
+performance:
+  huge_pages: true
+  swappiness: 10
+  tcp_congestion_control: bbr

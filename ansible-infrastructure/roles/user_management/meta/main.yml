@@ -1,0 +1,26 @@
+---
+galaxy_info:
+  author: Kellen
+  description: User management and SSH key deployment
+  company: Homelab
+  license: MIT
+  min_ansible_version: 2.14
+  platforms:
+    - name: Debian
+      versions:
+        - bullseye
+        - bookworm
+        - trixie
+    - name: Ubuntu
+      versions:
+        - focal
+        - jammy
+        - noble
+  galaxy_tags:
+    - users
+    - ssh
+    - security
+    - authentication
+
+dependencies:
+  - role: common

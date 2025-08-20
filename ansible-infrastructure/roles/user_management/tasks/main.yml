@@ -1,0 +1,71 @@
+---
+# User management tasks
+
+- name: Create system users
+  user:
+    name: "{{ item.name }}"
+    shell: "{{ item.shell | default('/bin/bash') }}"
+    create_home: "{{ item.create_home | default(true) }}"
+    groups: "{{ item.groups | default([]) }}"
+    append: "{{ item.append | default(true) }}"
+    state: "{{ item.state | default('present') }}"
+    comment: "{{ item.comment | default('') }}"
+  loop: "{{ system_users | default([]) }}"
+  when: system_users is defined
+
+- name: Create SSH directories for users
+  file:
+    path: "/home/{{ item.name }}/.ssh"
+    state: directory
+    owner: "{{ item.name }}"
+    group: "{{ item.name }}"
+    mode: '0700'
+  loop: "{{ system_users | default([]) }}"
+  when: 
+    - system_users is defined
+    - item.state | default('present') == 'present'
+    - item.ssh_key is defined
+
+- name: Deploy SSH public keys
+  authorized_key:
+    user: "{{ item.name }}"
+    key: "{{ item.ssh_key }}"
+    state: present
+    exclusive: "{{ item.exclusive_key | default(false) }}"
+  loop: "{{ system_users | default([]) }}"
+  when: 
+    - system_users is defined
+    - item.state | default('present') == 'present'
+    - item.ssh_key is defined
+
+- name: Configure sudo access
+  lineinfile:
+    path: "/etc/sudoers.d/{{ item.name }}"
+    create: yes
+    line: "{{ item.name }} ALL=(ALL) {{ 'NOPASSWD:' if item.passwordless_sudo | default(false) else '' }}ALL"
+    mode: '0440'
+    validate: 'visudo -cf %s'
+  loop: "{{ system_users | default([]) }}"
+  when: 
+    - system_users is defined
+    - item.state | default('present') == 'present'
+    - item.sudo | default(false)
+
+- name: Remove users
+  user:
+    name: "{{ item.name }}"
+    state: absent
+    remove: "{{ item.remove_home | default(true) }}"
+  loop: "{{ system_users | default([]) }}"
+  when:
+    - system_users is defined
+    - item.state | default('present') == 'absent'
+
+- name: Remove sudo files for absent users
+  file:
+    path: "/etc/sudoers.d/{{ item.name }}"
+    state: absent
+  loop: "{{ system_users | default([]) }}"
+  when:
+    - system_users is defined
+    - item.state | default('present') == 'absent'

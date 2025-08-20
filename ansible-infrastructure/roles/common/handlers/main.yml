@@ -1,0 +1,15 @@
+---
+# Common handlers
+
+- name: restart rsyslog
+  service:
+    name: rsyslog
+    state: restarted
+
+- name: reload systemctl
+  systemd:
+    daemon_reload: yes
+
+- name: update grub
+  command: update-grub
+  when: ansible_os_family == "Debian"

@@ -1,0 +1,47 @@
+---
+- name: Initial server setup and hardening
+  hosts: all
+  become: yes
+  gather_facts: yes
+  
+  vars:
+    # SSH public key for ansible user (get from 1Password)
+    ansible_ssh_public_key: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICsDyKQ8SMOJbzWGBiEf0K+uqMrBxTiDceqT3mMNgsSZ cogito"
+    
+    system_users:
+      - name: ansible
+        comment: "Ansible automation user"
+        groups:
+          - sudo
+        passwordless_sudo: true
+        ssh_key: "{{ ansible_ssh_public_key }}"
+        exclusive_key: true
+      
+      - name: kellen
+        comment: "Primary administrator"
+        groups:
+          - sudo
+          - adm
+        passwordless_sudo: false
+        ssh_key: "{{ ansible_ssh_public_key }}"
+        
+  roles:
+    - common
+    - user_management
+    - ssh_hardening
+    
+  post_tasks:
+    - name: Display setup completion message
+      debug:
+        msg: |
+          ✅ Initial setup completed successfully!
+          
+          🔧 Applied configurations:
+          - Common system packages and settings
+          - User accounts and SSH keys
+          - SSH hardening and security
+          
+          🎯 Next steps:
+          - Test SSH connectivity with new users
+          - Run maintenance playbooks
+          - Deploy applications and services

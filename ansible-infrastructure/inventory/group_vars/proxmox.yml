@@ -1,0 +1,42 @@
+---
+# Proxmox-specific variables
+
+# Proxmox packages
+proxmox_packages:
+  - pve-headers
+  - build-essential
+  - dkms
+  - python3-proxmoxer
+  - python3-requests
+
+# Storage configuration
+proxmox_storage:
+  local:
+    type: dir
+    content: "iso,vztmpl,backup"
+  local-lvm:
+    type: lvmthin
+    content: "images,rootdir"
+    
+# Network configuration  
+proxmox_network:
+  bridge_name: vmbr0
+  bridge_ports: enp0s3
+  bridge_stp: off
+  bridge_fd: 0
+
+# Backup settings
+proxmox_backup:
+  schedule: "02:00"
+  retention: 7
+  compression: lzo
+  
+# GPU passthrough settings (for AI workloads)
+gpu_passthrough:
+  enabled: true
+  iommu: true
+  vfio_modules:
+    - vfio
+    - vfio_iommu_type1
+    - vfio_pci
+    - vfio_virqfd

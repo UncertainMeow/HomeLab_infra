@@ -1,0 +1,12 @@
+---
+# Default users configuration
+
+# Example user configuration - override in inventory
+system_users:
+  - name: ansible
+    comment: "Ansible automation user"
+    groups:
+      - sudo
+    passwordless_sudo: true
+    ssh_key: "{{ ansible_ssh_public_key | default('') }}"
+    exclusive_key: true

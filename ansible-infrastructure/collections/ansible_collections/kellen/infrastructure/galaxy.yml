@@ -1,0 +1,28 @@
+---
+namespace: kellen
+name: infrastructure
+version: 1.0.0
+readme: README.md
+authors:
+  - Kellen <kellen@example.com>
+description: >-
+  Comprehensive infrastructure automation collection for Proxmox, SSH hardening,
+  user management, and AI/ML workload deployment.
+license_file: 'LICENSE'
+tags:
+  - proxmox
+  - infrastructure
+  - ssh
+  - security
+  - ai
+  - ml
+dependencies: {}
+repository: https://github.com/kellen/ansible-infrastructure
+documentation: https://github.com/kellen/ansible-infrastructure/docs
+homepage: https://github.com/kellen/ansible-infrastructure
+issues: https://github.com/kellen/ansible-infrastructure/issues
+build_ignore:
+  - '*.pyc'
+  - '.git'
+  - '.gitignore'
+  - 'tests/'

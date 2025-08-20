@@ -1,0 +1,120 @@
+---
+- name: Gather comprehensive system facts from Proxmox server
+  hosts: proxmox
+  gather_facts: yes
+  become: yes
+  
+  tasks:
+    - name: Display basic system information
+      debug:
+        msg: |
+          Hostname: {{ ansible_hostname }}
+          OS: {{ ansible_distribution }} {{ ansible_distribution_version }}
+          Kernel: {{ ansible_kernel }}
+          Architecture: {{ ansible_architecture }}
+          
+    - name: Display CPU information
+      debug:
+        msg: |
+          CPU Model: {{ ansible_processor[2] if ansible_processor|length > 2 else ansible_processor[0] }}
+          CPU Cores: {{ ansible_processor_cores }}
+          CPU Count: {{ ansible_processor_count }}
+          CPU Threads per Core: {{ ansible_processor_threads_per_core }}
+          Total CPUs: {{ ansible_processor_vcpus }}
+          
+    - name: Display memory information
+      debug:
+        msg: |
+          Total Memory: {{ (ansible_memtotal_mb / 1024) | round(2) }} GB
+          Available Memory: {{ (ansible_memfree_mb / 1024) | round(2) }} GB
+          Swap Total: {{ (ansible_swaptotal_mb / 1024) | round(2) }} GB
+          
+    - name: Get detailed CPU info
+      command: lscpu
+      register: cpu_details
+      
+    - name: Display detailed CPU information
+      debug:
+        var: cpu_details.stdout_lines
+        
+    - name: Get GPU information
+      shell: lspci | grep -i vga || echo "No VGA devices found"
+      register: gpu_info
+      
+    - name: Display GPU information
+      debug:
+        msg: "GPU Info: {{ gpu_info.stdout }}"
+        
+    - name: Check for NVIDIA GPUs
+      shell: nvidia-smi || echo "NVIDIA drivers not installed or no NVIDIA GPU"
+      register: nvidia_info
+      ignore_errors: yes
+      
+    - name: Display NVIDIA GPU details
+      debug:
+        var: nvidia_info.stdout_lines
+      when: nvidia_info.rc == 0
+      
+    - name: Get disk information
+      debug:
+        msg: |
+          Disk devices: {{ ansible_devices.keys() | list }}
+          
+    - name: Display disk details
+      debug:
+        msg: |
+          Device: {{ item }}
+          Size: {{ ansible_devices[item].size }}
+          Model: {{ ansible_devices[item].model | default('Unknown') }}
+      loop: "{{ ansible_devices.keys() | list }}"
+      when: ansible_devices[item].size is defined
+      
+    - name: Get network interfaces
+      debug:
+        msg: |
+          Network Interfaces: {{ ansible_interfaces }}
+          Default IPv4: {{ ansible_default_ipv4.address | default('Not configured') }}
+          
+    - name: Save facts to file
+      copy:
+        content: "{{ ansible_facts | to_nice_json }}"
+        dest: /tmp/ansible_facts.json
+        
+    - name: Create hardware summary
+      copy:
+        content: |
+          PROXMOX SERVER HARDWARE SUMMARY
+          ================================
+          
+          System Information:
+          - Hostname: {{ ansible_hostname }}
+          - OS: {{ ansible_distribution }} {{ ansible_distribution_version }}
+          - Kernel: {{ ansible_kernel }}
+          - Architecture: {{ ansible_architecture }}
+          - Uptime: {{ ansible_uptime_seconds | int // 86400 }} days, {{ (ansible_uptime_seconds | int % 86400) // 3600 }} hours
+          
+          CPU Information:
+          - Model: {{ ansible_processor[2] if ansible_processor|length > 2 else ansible_processor[0] }}
+          - Physical CPUs: {{ ansible_processor_count }}
+          - Cores per CPU: {{ ansible_processor_cores }}
+          - Threads per Core: {{ ansible_processor_threads_per_core }}
+          - Total vCPUs: {{ ansible_processor_vcpus }}
+          
+          Memory Information:
+          - Total RAM: {{ (ansible_memtotal_mb / 1024) | round(2) }} GB
+          - Available RAM: {{ (ansible_memfree_mb / 1024) | round(2) }} GB
+          - Total Swap: {{ (ansible_swaptotal_mb / 1024) | round(2) }} GB
+          
+          Storage Information:
+          {% for device in ansible_devices.keys() %}
+          {% if ansible_devices[device].size is defined %}
+          - {{ device }}: {{ ansible_devices[device].size }} ({{ ansible_devices[device].model | default('Unknown model') }})
+          {% endif %}
+          {% endfor %}
+          
+          Network Information:
+          - Primary IP: {{ ansible_default_ipv4.address | default('Not configured') }}
+          - Interfaces: {{ ansible_interfaces | join(', ') }}
+          
+          Generated: {{ ansible_date_time.iso8601 }}
+        dest: /tmp/hardware_summary.txt

@@ -1,0 +1,111 @@
+---
+- name: Install and configure Ollama for local LLM serving
+  hosts: ai_workers
+  become: yes
+  gather_facts: yes
+  
+  vars:
+    ollama_user: ollama
+    ollama_group: ollama
+    ollama_home: /opt/ollama
+    ollama_models_dir: "{{ ollama_home }}/models"
+    ollama_port: "{{ ai_software.ollama.port | default(11434) }}"
+    
+  tasks:
+    - name: Create ollama user
+      user:
+        name: "{{ ollama_user }}"
+        system: yes
+        shell: /bin/bash
+        home: "{{ ollama_home }}"
+        create_home: yes
+        
+    - name: Create ollama directories
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: "{{ ollama_user }}"
+        group: "{{ ollama_group }}"
+        mode: '0755'
+      loop:
+        - "{{ ollama_home }}"
+        - "{{ ollama_models_dir }}"
+        - /var/log/ollama
+        
+    - name: Download and install Ollama
+      get_url:
+        url: https://ollama.ai/install.sh
+        dest: /tmp/ollama-install.sh
+        mode: '0755'
+        
+    - name: Run Ollama installer
+      shell: /tmp/ollama-install.sh
+      environment:
+        OLLAMA_HOME: "{{ ollama_home }}"
+      
+    - name: Create Ollama systemd service
+      copy:
+        content: |
+          [Unit]
+          Description=Ollama Service
+          After=network-online.target
+          
+          [Service]
+          ExecStart=/usr/local/bin/ollama serve
+          User={{ ollama_user }}
+          Group={{ ollama_group }}
+          Restart=always
+          RestartSec=3
+          Environment="OLLAMA_HOST=0.0.0.0:{{ ollama_port }}"
+          Environment="OLLAMA_MODELS={{ ollama_models_dir }}"
+          
+          [Install]
+          WantedBy=default.target
+        dest: /etc/systemd/system/ollama.service
+        owner: root
+        group: root
+        mode: '0644'
+      notify:
+        - reload systemd
+        - restart ollama
+        
+    - name: Start and enable Ollama service
+      systemd:
+        name: ollama
+        state: started
+        enabled: yes
+        daemon_reload: yes
+        
+    - name: Wait for Ollama to be ready
+      uri:
+        url: "http://localhost:{{ ollama_port }}/api/tags"
+        method: GET
+      register: ollama_health
+      until: ollama_health.status == 200
+      retries: 30
+      delay: 2
+      
+    - name: Display Ollama status
+      debug:
+        msg: |
+          ✅ Ollama installation completed!
+          
+          🚀 Service Details:
+          - Port: {{ ollama_port }}
+          - Models Directory: {{ ollama_models_dir }}
+          - Service Status: {{ 'Running' if ollama_health.status == 200 else 'Not Ready' }}
+          
+          📝 Next Steps:
+          - Pull models: ollama pull llama2
+          - Test API: curl http://localhost:{{ ollama_port }}/api/tags
+          - Web UI available at: http://{{ ansible_host }}:{{ ollama_port }}
+          
+  handlers:
+    - name: reload systemd
+      systemd:
+        daemon_reload: yes
+        
+    - name: restart ollama
+      systemd:
+        name: ollama
+        state: restarted

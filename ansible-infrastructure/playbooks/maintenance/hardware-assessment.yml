@@ -1,0 +1,153 @@
+---
+- name: Comprehensive hardware assessment for AI/ML workloads
+  hosts: all
+  gather_facts: yes
+  become: yes
+  
+  tasks:
+    # Gather comprehensive system information
+    - name: Display basic system information
+      debug:
+        msg: |
+          === SYSTEM INFORMATION ===
+          Hostname: {{ ansible_hostname }}
+          OS: {{ ansible_distribution }} {{ ansible_distribution_version }}
+          Kernel: {{ ansible_kernel }}
+          Architecture: {{ ansible_architecture }}
+          Uptime: {{ ansible_uptime_seconds | int // 86400 }} days, {{ (ansible_uptime_seconds | int % 86400) // 3600 }} hours
+          
+    - name: Display hardware information
+      debug:
+        msg: |
+          === HARDWARE INFORMATION ===
+          CPU Model: {{ ansible_processor[2] if ansible_processor|length > 2 else ansible_processor[0] }}
+          Total vCPUs: {{ ansible_processor_vcpus }}
+          Physical CPUs: {{ ansible_processor_count }}
+          Cores per CPU: {{ ansible_processor_cores }}
+          Total Memory: {{ (ansible_memtotal_mb / 1024) | round(2) }} GB
+          Available Memory: {{ (ansible_memfree_mb / 1024) | round(2) }} GB
+          
+    - name: Get detailed CPU capabilities for AI/ML workloads
+      shell: |
+        echo "=== CPU FLAGS FOR AI/ML ==="
+        grep -o '\(avx\|avx2\|avx512\|fma\|sse4_2\|f16c\)' /proc/cpuinfo | sort | uniq | tr '\n' ' '
+        echo ""
+        echo "=== FULL CPU INFO ==="
+        lscpu | grep -E "(Model name|CPU\(s\)|Thread|Core|Socket|Architecture|Virtualization)"
+      register: cpu_ai_info
+      
+    - name: Display CPU capabilities
+      debug:
+        var: cpu_ai_info.stdout_lines
+        
+    - name: Check for GPU devices
+      shell: |
+        echo "=== GPU INFORMATION ==="
+        lspci | grep -i -E "(vga|3d|display)" || echo "No GPU devices found"
+        echo ""
+        if command -v nvidia-smi >/dev/null 2>&1; then
+          echo "=== NVIDIA GPU DETAILS ==="
+          nvidia-smi --query-gpu=name,memory.total,compute_cap --format=csv,noheader,nounits 2>/dev/null || echo "NVIDIA GPU present but nvidia-smi failed"
+        else
+          echo "No NVIDIA drivers detected"
+        fi
+      register: gpu_info
+      
+    - name: Display GPU information
+      debug:
+        var: gpu_info.stdout_lines
+        
+    - name: Get storage information for AI workloads
+      debug:
+        msg: |
+          === STORAGE INFORMATION ===
+          {% for device in ansible_devices.keys() %}
+          {% if ansible_devices[device].size is defined and not device.startswith('loop') %}
+          Device: {{ device }}
+          Size: {{ ansible_devices[device].size }}
+          Model: {{ ansible_devices[device].model | default('Unknown') }}
+          {% endif %}
+          {% endfor %}
+          
+    - name: Create comprehensive hardware report for AI/ML planning
+      copy:
+        content: |
+          HARDWARE ASSESSMENT - AI/ML CAPABILITIES
+          ========================================
+          Generated: {{ ansible_date_time.iso8601 }}
+          
+          SYSTEM OVERVIEW:
+          - Hostname: {{ ansible_hostname }}
+          - OS: {{ ansible_distribution }} {{ ansible_distribution_version }}
+          - Kernel: {{ ansible_kernel }}
+          - Architecture: {{ ansible_architecture }}
+          - Uptime: {{ ansible_uptime_seconds | int // 86400 }} days
+          
+          CPU ANALYSIS FOR AI/ML:
+          - Model: {{ ansible_processor[2] if ansible_processor|length > 2 else ansible_processor[0] }}
+          - Physical CPUs: {{ ansible_processor_count }}
+          - Total Cores: {{ ansible_processor_cores * ansible_processor_count }}
+          - Total Threads: {{ ansible_processor_vcpus }}
+          - Architecture: {{ ansible_architecture }}
+          
+          MEMORY CONFIGURATION:
+          - Total RAM: {{ (ansible_memtotal_mb / 1024) | round(2) }} GB
+          - Available RAM: {{ (ansible_memfree_mb / 1024) | round(2) }} GB
+          
+          STORAGE OVERVIEW:
+          {% for device in ansible_devices.keys() %}
+          {% if ansible_devices[device].size is defined and not device.startswith('loop') %}
+          - {{ device }}: {{ ansible_devices[device].size }}
+          {% endif %}
+          {% endfor %}
+          
+          AI/ML WORKLOAD RECOMMENDATIONS:
+          
+          Based on this hardware profile:
+          
+          1. Memory Considerations:
+             - {{ (ansible_memtotal_mb / 1024) | round(2) }} GB allows for:
+               * 7B models: ~14-16GB RAM needed (with quantization)
+               * 13B models: ~26-30GB RAM needed
+               * 30B models: ~60GB RAM needed
+               * 70B models: ~140GB RAM needed (requires quantization)
+          
+          2. Recommended Model Sizes:
+             {% if (ansible_memtotal_mb / 1024) | round(2) >= 200 %}
+             - Can run 70B+ models with 4-bit quantization
+             - Multiple smaller models simultaneously
+             - Large context windows (32k+ tokens)
+             {% elif (ansible_memtotal_mb / 1024) | round(2) >= 100 %}
+             - Can run 30B models comfortably
+             - 70B models with aggressive quantization
+             {% elif (ansible_memtotal_mb / 1024) | round(2) >= 32 %}
+             - Optimal for 13B-30B models
+             - 7B models with large context
+             {% else %}
+             - Best suited for 7B and smaller models
+             {% endif %}
+          
+          3. Performance Optimization:
+             - CPU supports modern instruction sets for inference acceleration
+             - Consider GPU acceleration for training workloads
+             - Fast storage recommended for model loading
+        dest: /tmp/hardware_ai_assessment.txt
+        
+    - name: Save raw system facts
+      copy:
+        content: "{{ ansible_facts | to_nice_json }}"
+        dest: /tmp/ansible_facts.json
+        
+    - name: Display final summary
+      debug:
+        msg: |
+          ✅ Hardware assessment complete!
+          
+          📊 System Summary:
+          - CPU: {{ ansible_processor_vcpus }} vCPUs ({{ ansible_processor[2] if ansible_processor|length > 2 else ansible_processor[0] }})
+          - RAM: {{ (ansible_memtotal_mb / 1024) | round(2) }} GB
+          - OS: {{ ansible_distribution }} {{ ansible_distribution_version }}
+          
+          📄 Reports saved to:
+          - /tmp/hardware_ai_assessment.txt (AI/ML capabilities analysis)
+          - /tmp/ansible_facts.json (raw system facts)

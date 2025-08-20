@@ -1,0 +1,8 @@
+---
+# SSH hardening handlers
+
+- name: restart ssh
+  systemd:
+    name: ssh
+    state: restarted
+  listen: "restart ssh"

@@ -1,0 +1,186 @@
+---
+- name: Proxmox server maintenance - gather facts and update packages
+  hosts: proxmox
+  gather_facts: yes
+  become: yes
+  
+  tasks:
+    # Gather comprehensive system information
+    - name: Display basic system information
+      debug:
+        msg: |
+          === SYSTEM INFORMATION ===
+          Hostname: {{ ansible_hostname }}
+          OS: {{ ansible_distribution }} {{ ansible_distribution_version }}
+          Kernel: {{ ansible_kernel }}
+          Architecture: {{ ansible_architecture }}
+          Uptime: {{ ansible_uptime_seconds | int // 86400 }} days, {{ (ansible_uptime_seconds | int % 86400) // 3600 }} hours
+          
+    - name: Display hardware information
+      debug:
+        msg: |
+          === HARDWARE INFORMATION ===
+          CPU Model: {{ ansible_processor[2] if ansible_processor|length > 2 else ansible_processor[0] }}
+          Total vCPUs: {{ ansible_processor_vcpus }}
+          Physical CPUs: {{ ansible_processor_count }}
+          Cores per CPU: {{ ansible_processor_cores }}
+          Total Memory: {{ (ansible_memtotal_mb / 1024) | round(2) }} GB
+          Available Memory: {{ (ansible_memfree_mb / 1024) | round(2) }} GB
+          
+    - name: Get detailed CPU capabilities for AI/ML workloads
+      shell: |
+        echo "=== CPU FLAGS FOR AI/ML ==="
+        grep -o '\(avx\|avx2\|avx512\|fma\|sse4_2\|f16c\)' /proc/cpuinfo | sort | uniq | tr '\n' ' '
+        echo ""
+        echo "=== FULL CPU INFO ==="
+        lscpu | grep -E "(Model name|CPU\(s\)|Thread|Core|Socket|Architecture|Virtualization)"
+      register: cpu_ai_info
+      
+    - name: Display CPU capabilities
+      debug:
+        var: cpu_ai_info.stdout_lines
+        
+    - name: Check for GPU devices
+      shell: |
+        echo "=== GPU INFORMATION ==="
+        lspci | grep -i -E "(vga|3d|display)" || echo "No GPU devices found"
+        echo ""
+        if command -v nvidia-smi >/dev/null 2>&1; then
+          echo "=== NVIDIA GPU DETAILS ==="
+          nvidia-smi --query-gpu=name,memory.total,compute_cap --format=csv,noheader,nounits 2>/dev/null || echo "NVIDIA GPU present but nvidia-smi failed"
+        else
+          echo "No NVIDIA drivers detected"
+        fi
+      register: gpu_info
+      
+    - name: Display GPU information
+      debug:
+        var: gpu_info.stdout_lines
+        
+    - name: Get storage information for AI workloads
+      debug:
+        msg: |
+          === STORAGE INFORMATION ===
+          {% for device in ansible_devices.keys() %}
+          {% if ansible_devices[device].size is defined and not device.startswith('loop') %}
+          Device: {{ device }}
+          Size: {{ ansible_devices[device].size }}
+          Model: {{ ansible_devices[device].model | default('Unknown') }}
+          {% endif %}
+          {% endfor %}
+          
+    # Package updates
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+      when: ansible_os_family == "Debian"
+      
+    - name: Get list of upgradable packages
+      shell: apt list --upgradable 2>/dev/null | grep -v "WARNING" | wc -l
+      register: upgradable_count
+      when: ansible_os_family == "Debian"
+      changed_when: false
+      
+    - name: Display upgrade information
+      debug:
+        msg: "{{ (upgradable_count.stdout | int) - 1 }} packages available for upgrade"
+      when: ansible_os_family == "Debian"
+      
+    - name: Upgrade all packages
+      apt:
+        upgrade: dist
+        autoremove: yes
+        autoclean: yes
+      register: upgrade_result
+      when: ansible_os_family == "Debian"
+      
+    - name: Check if reboot is required
+      stat:
+        path: /var/run/reboot-required
+      register: reboot_required
+      when: ansible_os_family == "Debian"
+      
+    - name: Display reboot requirement
+      debug:
+        msg: "⚠️  SYSTEM REBOOT REQUIRED AFTER UPDATES"
+      when: ansible_os_family == "Debian" and reboot_required.stat.exists
+      
+    # Save comprehensive hardware report
+    - name: Create comprehensive hardware report for AI/ML planning
+      copy:
+        content: |
+          PROXMOX SERVER - AI/ML HARDWARE ASSESSMENT
+          ==========================================
+          Generated: {{ ansible_date_time.iso8601 }}
+          
+          SYSTEM OVERVIEW:
+          - Hostname: {{ ansible_hostname }}
+          - OS: {{ ansible_distribution }} {{ ansible_distribution_version }}
+          - Kernel: {{ ansible_kernel }}
+          - Architecture: {{ ansible_architecture }}
+          - Uptime: {{ ansible_uptime_seconds | int // 86400 }} days
+          
+          CPU ANALYSIS FOR AI/ML:
+          - Model: {{ ansible_processor[2] if ansible_processor|length > 2 else ansible_processor[0] }}
+          - Physical CPUs: {{ ansible_processor_count }}
+          - Total Cores: {{ ansible_processor_cores * ansible_processor_count }}
+          - Total Threads: {{ ansible_processor_vcpus }}
+          - Architecture: {{ ansible_architecture }}
+          
+          MEMORY CONFIGURATION:
+          - Total RAM: {{ (ansible_memtotal_mb / 1024) | round(2) }} GB
+          - Available RAM: {{ (ansible_memfree_mb / 1024) | round(2) }} GB
+          - Memory Type: DDR (check BIOS/hardware specs for DDR3/DDR4/DDR5)
+          
+          STORAGE OVERVIEW:
+          {% for device in ansible_devices.keys() %}
+          {% if ansible_devices[device].size is defined and not device.startswith('loop') %}
+          - {{ device }}: {{ ansible_devices[device].size }}
+          {% endif %}
+          {% endfor %}
+          
+          AI/ML WORKLOAD RECOMMENDATIONS:
+          
+          Based on this hardware profile, here are potential AI/ML workloads:
+          
+          1. CPU-Only Models (if no dedicated GPU):
+             - Small language models (up to 7B parameters with quantization)
+             - Inference workloads for lightweight models
+             - Traditional ML workloads (scikit-learn, XGBoost)
+          
+          2. Memory Considerations:
+             - Available RAM determines maximum model size
+             - {{ (ansible_memtotal_mb / 1024) | round(2) }} GB allows for:
+               * 3B models: ~6-8GB RAM needed
+               * 7B models: ~14-16GB RAM needed (with quantization)
+               * 13B models: ~26-30GB RAM needed (if sufficient memory)
+          
+          3. Recommended Next Steps:
+             - Check for hardware-specific AI acceleration (Intel QAT, etc.)
+             - Consider GPU passthrough for VMs if planning containerized AI workloads
+             - Evaluate network bandwidth for distributed inference
+             - Review storage I/O for model loading performance
+          
+          PACKAGE UPDATE STATUS:
+          - Updates applied: {{ upgrade_result.changed | default(false) }}
+          - Reboot required: {{ reboot_required.stat.exists | default(false) }}
+        dest: /tmp/proxmox_ai_hardware_report.txt
+        
+    - name: Display final summary
+      debug:
+        msg: |
+          ✅ Hardware assessment complete!
+          
+          📊 System Summary:
+          - CPU: {{ ansible_processor_vcpus }} vCPUs ({{ ansible_processor[2] if ansible_processor|length > 2 else ansible_processor[0] }})
+          - RAM: {{ (ansible_memtotal_mb / 1024) | round(2) }} GB
+          - OS: {{ ansible_distribution }} {{ ansible_distribution_version }}
+          
+          📄 Reports saved to:
+          - /tmp/proxmox_ai_hardware_report.txt (comprehensive AI/ML assessment)
+          - /tmp/ansible_facts.json (raw system facts)
+          
+          {% if reboot_required.stat.exists | default(false) %}
+          ⚠️  System reboot recommended after package updates
+          {% endif %}

@@ -1,0 +1,66 @@
+---
+# Host-specific variables for socrates
+
+# Hardware profile
+hardware:
+  cpu:
+    model: "Intel Xeon E5-2660 v4"
+    cores: 56
+    architecture: "x86_64"
+    features:
+      - "avx"
+      - "avx2" 
+      - "fma"
+      - "sse4_2"
+      - "f16c"
+  
+  memory:
+    total_gb: 252
+    type: "DDR4"
+    
+  gpu:
+    count: 2
+    model: "NVIDIA Tesla P40"
+    vram_gb: 24
+    compute_capability: "6.1"
+    total_vram_gb: 48
+    
+  storage:
+    boot_drive: "/dev/sda"
+    data_drives:
+      - "/dev/sdb"
+      - "/dev/sdc" 
+      - "/dev/sdd"
+      - "/dev/sde"
+      - "/dev/sdf"
+
+# Network configuration
+network:
+  primary_interface: "ens33"
+  ip_address: "10.203.3.42"
+  gateway: "10.203.3.1"
+  dns_servers:
+    - "1.1.1.1"
+    - "8.8.8.8"
+
+# AI/ML specific configuration
+ai_config:
+  max_model_size: "70B"  # Based on available RAM
+  gpu_memory_limit: "48GB"
+  recommended_models:
+    - "llama2-70b-chat"
+    - "codellama-34b-instruct" 
+    - "mistral-7b-instruct"
+    - "stable-diffusion-xl"
+    
+  frameworks:
+    pytorch: true
+    tensorflow: true
+    jax: false
+    onnx: true
+    
+# Proxmox specific
+proxmox:
+  node_name: "socrates"
+  cluster_member: false
+  web_interface_port: 8006

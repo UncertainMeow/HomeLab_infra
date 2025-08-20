@@ -1,0 +1,14 @@
+2025-08-19 11:39:14,831 p=95946 u=kellen n=ansible INFO| socrates | UNREACHABLE! => {
+    "changed": false,
+    "msg": "Data could not be sent to remote host \"10.203.3.42\". Make sure this host can be reached over ssh: Can't open user config file ~/.ssh/config-proxmox: No such file or directory\r\n",
+    "unreachable": true
+}
+2025-08-19 11:39:56,765 p=95980 u=kellen n=ansible INFO| socrates | UNREACHABLE! => {
+    "changed": false,
+    "msg": "Data could not be sent to remote host \"10.203.3.42\". Make sure this host can be reached over ssh: Can't open user config file ~/.ssh/config-proxmox: No such file or directory\r\n",
+    "unreachable": true
+}
+2025-08-19 11:40:50,507 p=96042 u=kellen n=ansible INFO| socrates | SUCCESS => {
+    "changed": false,
+    "ping": "pong"
+}

@@ -1,0 +1,38 @@
+---
+# SSH hardening tasks
+
+- name: Backup original SSH configuration
+  copy:
+    src: /etc/ssh/sshd_config
+    dest: /etc/ssh/sshd_config.backup
+    remote_src: yes
+    backup: yes
+  when: not ansible_check_mode
+
+- name: Configure SSH security settings
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "{{ item.regexp }}"
+    line: "{{ item.line }}"
+    backup: yes
+  loop:
+    - { regexp: '^#?PermitRootLogin', line: 'PermitRootLogin {{ ssh_config.permit_root_login }}' }
+    - { regexp: '^#?PasswordAuthentication', line: 'PasswordAuthentication {{ ssh_config.password_authentication | ternary("yes", "no") }}' }
+    - { regexp: '^#?PubkeyAuthentication', line: 'PubkeyAuthentication {{ ssh_config.pubkey_authentication | ternary("yes", "no") }}' }
+    - { regexp: '^#?ChallengeResponseAuthentication', line: 'ChallengeResponseAuthentication {{ ssh_config.challenge_response_authentication | ternary("yes", "no") }}' }
+    - { regexp: '^#?UsePAM', line: 'UsePAM {{ ssh_config.use_pam | ternary("yes", "no") }}' }
+    - { regexp: '^#?X11Forwarding', line: 'X11Forwarding {{ ssh_config.x11_forwarding | ternary("yes", "no") }}' }
+    - { regexp: '^#?ClientAliveInterval', line: 'ClientAliveInterval {{ ssh_config.client_alive_interval }}' }
+    - { regexp: '^#?ClientAliveCountMax', line: 'ClientAliveCountMax {{ ssh_config.client_alive_count_max }}' }
+  notify: restart ssh
+
+- name: Test SSH configuration
+  command: sshd -t
+  changed_when: false
+  check_mode: no
+
+- name: Ensure SSH service is enabled and started
+  systemd:
+    name: ssh
+    state: started
+    enabled: yes

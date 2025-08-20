@@ -1,0 +1,5 @@
+---
+# Master playbook for full infrastructure deployment
+- import_playbook: playbooks/setup/initial-setup.yml
+- import_playbook: playbooks/maintenance/system-update.yml
+- import_playbook: playbooks/maintenance/hardware-assessment.yml
