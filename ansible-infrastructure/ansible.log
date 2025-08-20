@@ -12,3 +12,35 @@
     "changed": false,
     "ping": "pong"
 }
+2025-08-20 06:03:59,307 p=8994 u=kellen n=ansible ERROR| ERROR! the role 'docker_setup' was not found in ansible.legacy:/Users/kellen/1-Projects/AI/HomeLab_infra/ansible-infrastructure/playbooks/deployment/roles:/Users/kellen/1-Projects/AI/HomeLab_infra/ansible-infrastructure/roles:/Users/kellen/1-Projects/AI/HomeLab_infra/ansible-infrastructure/collections/ansible_collections/kellen/infrastructure/roles:/Users/kellen/1-Projects/AI/HomeLab_infra/ansible-infrastructure/roles:/Users/kellen/1-Projects/AI/HomeLab_infra/ansible-infrastructure/playbooks/deployment
+
+The error appears to be in '/Users/kellen/1-Projects/AI/HomeLab_infra/ansible-infrastructure/roles/gitlab_stack/meta/main.yml': line 35, column 5, but may
+be elsewhere in the file depending on the exact syntax problem.
+
+The offending line appears to be:
+
+
+  - role: docker_setup
+    ^ here
+
+2025-08-20 06:04:15,672 p=9109 u=kellen n=ansible INFO| playbook: /Users/kellen/1-Projects/AI/HomeLab_infra/ansible-infrastructure/playbooks/deployment/gitlab-stack.yml
+2025-08-20 06:04:30,649 p=9209 u=kellen n=ansible INFO| playbook: /Users/kellen/1-Projects/AI/HomeLab_infra/ansible-infrastructure/playbooks/deployment/technitium-dns-container.yml
+2025-08-20 06:04:33,305 p=9228 u=kellen n=ansible WARNING| [WARNING]: Could not match supplied host pattern, ignoring: dns-lxc
+
+2025-08-20 06:04:33,305 p=9228 u=kellen n=ansible INFO| playbook: /Users/kellen/1-Projects/AI/HomeLab_infra/ansible-infrastructure/playbooks/deployment/dns-lxc.yml
+2025-08-20 06:04:40,489 p=9300 u=kellen n=ansible ERROR| ERROR! Attempting to decrypt but no vault secrets found
+2025-08-20 06:04:46,875 p=9348 u=kellen n=ansible INFO| @all:
+  |--@ungrouped:
+  |--@proxmox:
+  |  |--socrates
+  |  |--rawls
+  |  |--rseau
+  |--@kubernetes:
+  |--@ai_workers:
+  |  |--socrates
+  |--@dns_servers:
+  |  |--rseau
+  |--@iac_services:
+  |  |--rawls
+  |--@monitoring:
+2025-08-20 06:05:18,880 p=9791 u=kellen n=ansible INFO| playbook: /Users/kellen/1-Projects/AI/HomeLab_infra/ansible-infrastructure/site.yml

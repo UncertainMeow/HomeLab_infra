@@ -1,0 +1,31 @@
+---
+# Tailscale configuration defaults
+tailscale_package_state: "present"
+tailscale_service_state: "started"
+tailscale_service_enabled: true
+
+# Auth configuration
+tailscale_auth_key: ""  # Set this in group_vars or host_vars
+tailscale_advertise_exit_node: false
+tailscale_advertise_routes: []  # e.g., ["10.203.0.0/16"]
+tailscale_accept_routes: true
+tailscale_accept_dns: true
+
+# Security settings
+tailscale_shields_up: false
+tailscale_ssh: true  # Enable Tailscale SSH
+tailscale_hostname: "{{ inventory_hostname }}"
+
+# Advanced settings
+tailscale_force_reauth: false
+tailscale_timeout: 120
+
+# Node tagging (for ACL policies)
+tailscale_tags: []  # e.g., ["tag:homelab", "tag:dns"]
+
+# Subnet routing (for exposing local networks)
+tailscale_subnet_routes: []  # e.g., ["10.203.0.0/16"]
+
+# Exit node configuration
+tailscale_exit_node: false
+tailscale_exit_node_allow_lan_access: true

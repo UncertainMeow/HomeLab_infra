@@ -1,0 +1,29 @@
+---
+# Technitium DNS Server installation and configuration
+
+- name: Include system preparation tasks
+  include_tasks: prepare_system.yml
+  tags: [technitium, system, preparation]
+
+- name: Include Docker setup tasks
+  include_tasks: setup_docker.yml
+  tags: [technitium, docker]
+
+- name: Include Technitium DNS deployment tasks
+  include_tasks: deploy_dns.yml
+  tags: [technitium, deploy]
+
+- name: Include DNS configuration tasks
+  include_tasks: configure_dns.yml
+  tags: [technitium, configure]
+  when: technitium_zones | length > 0
+
+- name: Display access information
+  debug:
+    msg:
+      - "Technitium DNS Server deployed successfully!"
+      - "Web Console: http://{{ ansible_default_ipv4.address }}:{{ technitium_web_port }}"
+      - "Admin User: {{ technitium_admin_user }}"
+      - "Admin Password: {{ technitium_admin_password | default('Check /opt/technitium/admin_password.txt') }}"
+      - "DNS Server: {{ ansible_default_ipv4.address }}:{{ technitium_dns_port }}"
+  tags: [technitium, info]

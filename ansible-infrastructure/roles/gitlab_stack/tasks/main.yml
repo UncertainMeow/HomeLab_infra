@@ -1,0 +1,28 @@
+---
+# GitLab Stack Deployment Tasks
+
+- name: Include system preparation tasks
+  include_tasks: system-prep.yml
+
+- name: Include Docker setup tasks
+  include_tasks: docker-setup.yml
+
+- name: Include Tailscale setup tasks
+  include_tasks: tailscale-setup.yml
+  when: enable_tailscale_domains
+
+- name: Include GitLab stack deployment tasks
+  include_tasks: gitlab-deploy.yml
+
+- name: Include Caddy configuration tasks
+  include_tasks: caddy-config.yml
+
+- name: Include security configuration tasks
+  include_tasks: security-config.yml
+
+- name: Include backup configuration tasks
+  include_tasks: backup-config.yml
+  when: enable_gitlab_backups
+
+- name: Display deployment summary
+  include_tasks: deployment-summary.yml

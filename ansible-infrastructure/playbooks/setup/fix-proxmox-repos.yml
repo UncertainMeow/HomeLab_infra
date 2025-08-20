@@ -1,0 +1,39 @@
+---
+# Fix Proxmox repository configuration for no-subscription installations
+# This removes enterprise repos and adds no-subscription repos
+
+- name: Fix Proxmox Repository Configuration
+  hosts: proxmox
+  become: yes
+  gather_facts: yes
+  
+  tasks:
+    - name: Disable enterprise repositories
+      lineinfile:
+        path: "{{ item }}"
+        regexp: '^deb'
+        line: '# deb'
+        backup: yes
+      loop:
+        - /etc/apt/sources.list.d/pve-enterprise.list
+        - /etc/apt/sources.list.d/ceph.list
+      ignore_errors: yes
+
+    - name: Add no-subscription repository
+      apt_repository:
+        repo: "deb http://download.proxmox.com/debian/pve {{ ansible_distribution_release }} pve-no-subscription"
+        state: present
+        filename: pve-no-subscription
+
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+
+    - name: Display repository status
+      debug:
+        msg:
+          - "✅ Proxmox repositories fixed"
+          - "   Enterprise repos disabled"
+          - "   No-subscription repo added"
+          - "   Package cache updated"

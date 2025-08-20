@@ -1,0 +1,27 @@
+---
+galaxy_info:
+  author: "HomeLab Infrastructure"
+  description: "Technitium DNS Server deployment and configuration"
+  company: "doofus.co"
+  license: "MIT"
+  min_ansible_version: "2.9"
+  
+  platforms:
+    - name: Ubuntu
+      versions:
+        - focal
+        - jammy
+    - name: Debian
+      versions:
+        - bullseye
+        - bookworm
+  
+  galaxy_tags:
+    - dns
+    - technitium
+    - docker
+    - networking
+
+dependencies:
+  - role: common
+    when: technitium_install_common_deps | default(true)

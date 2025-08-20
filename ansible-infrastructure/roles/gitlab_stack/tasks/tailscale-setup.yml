@@ -1,0 +1,53 @@
+---
+# Tailscale setup for magic domains
+
+- name: Check if Tailscale is already installed
+  command: which tailscale
+  register: tailscale_installed
+  ignore_errors: yes
+  changed_when: false
+
+- name: Download and install Tailscale
+  shell: |
+    curl -fsSL https://tailscale.com/install.sh | sh
+  when: tailscale_installed.rc != 0
+
+- name: Check if Tailscale is already connected
+  command: tailscale status --json
+  register: tailscale_status
+  ignore_errors: yes
+  changed_when: false
+
+- name: Connect to Tailscale network
+  command: >
+    tailscale up 
+    --auth-key={{ tailscale_auth_key }}
+    --hostname={{ tailscale_hostname_override }}
+    --advertise-tags=tag:homelab
+  when: 
+    - tailscale_auth_key != ""
+    - tailscale_status.rc != 0 or "NotRunning" in tailscale_status.stdout
+  register: tailscale_connect
+
+- name: Get Tailscale IP address
+  command: tailscale ip -4
+  register: tailscale_ip_result
+  changed_when: false
+
+- name: Set Tailscale IP fact
+  set_fact:
+    tailscale_ip: "{{ tailscale_ip_result.stdout.strip() }}"
+
+- name: Display Tailscale connection info
+  debug:
+    msg: |
+      ✅ Tailscale connected successfully!
+      
+      📡 Tailscale IP: {{ tailscale_ip }}
+      🏷️  Hostname: {{ tailscale_hostname_override }}
+      🌐 Magic DNS: {{ tailscale_hostname_override }}.ts.net
+      
+      🎯 Your services will be available at:
+      - gitlab.{{ tailscale_hostname_override }}.ts.net
+      - semaphore.{{ tailscale_hostname_override }}.ts.net (Phase 2)
+  when: tailscale_ip is defined

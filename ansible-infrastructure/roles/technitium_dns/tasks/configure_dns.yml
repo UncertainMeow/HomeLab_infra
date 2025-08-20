@@ -1,0 +1,30 @@
+---
+# Configure Technitium DNS zones and records
+
+- name: Create zone configuration script
+  template:
+    src: configure_zones.py.j2
+    dest: "{{ technitium_data_path }}/configure_zones.py"
+    mode: '0755'
+  when: technitium_zones | length > 0
+
+- name: Install python requests for zone configuration
+  package:
+    name: python3-requests
+    state: present
+
+- name: Configure DNS zones
+  command: "python3 {{ technitium_data_path }}/configure_zones.py"
+  register: zone_config_result
+  when: technitium_zones | length > 0
+  environment:
+    TECHNITIUM_URL: "http://{{ ansible_default_ipv4.address }}:{{ technitium_web_port }}"
+    TECHNITIUM_USER: "{{ technitium_admin_user }}"
+    TECHNITIUM_PASSWORD: "{{ technitium_admin_password }}"
+
+- name: Display zone configuration result
+  debug:
+    var: zone_config_result.stdout_lines
+  when: 
+    - technitium_zones | length > 0
+    - zone_config_result is defined

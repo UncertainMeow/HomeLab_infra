@@ -1,0 +1,44 @@
+#!/bin/bash
+# Basic DNS zone setup for doofus.co homelab domain
+
+DNS_API_URL="{{ dns_admin_url }}/api"
+ADMIN_PASSWORD="{{ dns_admin_password }}"
+DOMAIN="doofus.co"
+
+echo "🌐 Setting up DNS zones for ${DOMAIN}..."
+
+# Function to make API calls to Technitium DNS
+call_dns_api() {
+    local endpoint=$1
+    local data=$2
+    local method=${3:-POST}
+    
+    curl -s -X "$method" \
+         -H "Content-Type: application/x-www-form-urlencoded" \
+         -d "token=${ADMIN_PASSWORD}&${data}" \
+         "${DNS_API_URL}${endpoint}"
+}
+
+# Create primary zone for doofus.co
+echo "Creating primary zone for ${DOMAIN}..."
+call_dns_api "/zones/create" "domain=${DOMAIN}&type=Primary"
+
+# Add A records for homelab hosts
+echo "Adding homelab host records..."
+
+# Core infrastructure
+call_dns_api "/zones/records/add" "domain=${DOMAIN}&name=socrates&type=A&ipAddress=10.203.3.42&ttl=300"
+call_dns_api "/zones/records/add" "domain=${DOMAIN}&name=rawls&type=A&ipAddress=10.203.3.47&ttl=300"
+call_dns_api "/zones/records/add" "domain=${DOMAIN}&name=rseau&type=A&ipAddress=10.203.1.2&ttl=300"
+call_dns_api "/zones/records/add" "domain=${DOMAIN}&name=htpc&type=A&ipAddress=10.203.3.46&ttl=300"
+call_dns_api "/zones/records/add" "domain=${DOMAIN}&name=zinn&type=A&ipAddress=10.203.3.223&ttl=300"
+
+# Services (initially pointing to rawls)
+call_dns_api "/zones/records/add" "domain=${DOMAIN}&name=gitlab&type=A&ipAddress=10.203.3.47&ttl=300"
+call_dns_api "/zones/records/add" "domain=${DOMAIN}&name=semaphore&type=A&ipAddress=10.203.3.47&ttl=300"
+
+# DNS server itself
+call_dns_api "/zones/records/add" "domain=${DOMAIN}&name=dns&type=A&ipAddress=10.203.1.3&ttl=300"
+
+echo "✅ DNS zone setup completed for ${DOMAIN}"
+echo "🔍 You can verify at: {{ dns_admin_url }}"

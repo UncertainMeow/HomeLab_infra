@@ -1,0 +1,36 @@
+---
+# Deploy Technitium DNS Server container
+
+- name: Create Technitium DNS Server container
+  docker_container:
+    name: "{{ technitium_container_name }}"
+    image: "{{ technitium_image }}"
+    restart_policy: "{{ technitium_restart_policy }}"
+    network_mode: "{{ technitium_network_mode }}"
+    ports:
+      - "{{ technitium_dns_port }}:53/tcp"
+      - "{{ technitium_dns_port }}:53/udp"
+      - "{{ technitium_web_port }}:5380/tcp"
+    volumes:
+      - "{{ technitium_data_path }}:/etc/dns"
+    env:
+      DNS_SERVER_DOMAIN: "{{ technitium_domain }}"
+      DNS_SERVER_ADMIN_PASSWORD: "{{ technitium_admin_password | default(omit) }}"
+    state: started
+  register: technitium_container_result
+
+- name: Wait for Technitium DNS web interface to be available
+  uri:
+    url: "http://{{ ansible_default_ipv4.address }}:{{ technitium_web_port }}"
+    method: GET
+    status_code: 200
+  register: web_check
+  until: web_check.status == 200
+  retries: 30
+  delay: 2
+
+- name: Verify DNS service is responding
+  command: "dig @{{ ansible_default_ipv4.address }} google.com"
+  register: dns_test
+  changed_when: false
+  failed_when: "'ANSWER SECTION' not in dns_test.stdout"

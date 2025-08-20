@@ -1,0 +1,28 @@
+---
+# Docker setup for Technitium DNS Server
+
+- name: Ensure Docker is installed
+  package:
+    name: 
+      - docker.io
+      - docker-compose
+    state: present
+  notify: "start docker service"
+
+- name: Start and enable Docker service
+  systemd:
+    name: docker
+    state: started
+    enabled: yes
+
+- name: Pull Technitium DNS Server image
+  docker_image:
+    name: "{{ technitium_image }}"
+    source: pull
+    force_source: yes
+
+- name: Stop existing Technitium DNS container
+  docker_container:
+    name: "{{ technitium_container_name }}"
+    state: absent
+  ignore_errors: yes

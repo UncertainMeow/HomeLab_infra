@@ -1,0 +1,30 @@
+---
+# Docker and Docker Compose setup
+
+- name: Check if Docker Compose v2 is available
+  command: docker compose version
+  register: docker_compose_v2_check
+  ignore_errors: yes
+  changed_when: false
+
+- name: Set Docker Compose command
+  set_fact:
+    docker_compose_cmd: "{{ 'docker compose' if docker_compose_v2_check.rc == 0 else 'docker-compose' }}"
+
+- name: Install Docker Compose v1 if v2 not available
+  pip:
+    name: docker-compose
+    state: present
+  when: docker_compose_v2_check.rc != 0
+
+- name: Test Docker access for ansible user
+  command: docker ps
+  become_user: "{{ ansible_user }}"
+  changed_when: false
+
+- name: Create Docker network for GitLab stack
+  docker_network:
+    name: gitlab-network
+    driver: bridge
+    ipam_config:
+      - subnet: 172.20.0.0/16

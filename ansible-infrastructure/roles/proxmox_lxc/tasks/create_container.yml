@@ -1,0 +1,118 @@
+---
+# Create and configure LXC container in Proxmox
+
+- name: Install proxmoxer Python library
+  pip:
+    name: proxmoxer
+    state: present
+  delegate_to: localhost
+  run_once: true
+
+- name: Install requests library
+  pip:
+    name: requests
+    state: present
+  delegate_to: localhost
+  run_once: true
+
+- name: Get next available VMID if not specified
+  uri:
+    url: "https://{{ lxc_api_host }}:8006/api2/json/cluster/nextid"
+    method: GET
+    user: "{{ lxc_api_user }}"
+    password: "{{ lxc_api_password }}"
+    validate_certs: false
+  register: next_vmid
+  when: lxc_vmid == ""
+  delegate_to: localhost
+
+- name: Set VMID
+  set_fact:
+    lxc_vmid: "{{ next_vmid.json.data if lxc_vmid == '' else lxc_vmid }}"
+
+- name: Check if container already exists
+  uri:
+    url: "https://{{ lxc_api_host }}:8006/api2/json/nodes/{{ lxc_node }}/lxc/{{ lxc_vmid }}/status/current"
+    method: GET
+    user: "{{ lxc_api_user }}"
+    password: "{{ lxc_api_password }}"
+    validate_certs: false
+    status_code: [200, 404]
+  register: container_check
+  delegate_to: localhost
+
+- name: Create LXC container
+  uri:
+    url: "https://{{ lxc_api_host }}:8006/api2/json/nodes/{{ lxc_node }}/lxc"
+    method: POST
+    user: "{{ lxc_api_user }}"
+    password: "{{ lxc_api_password }}"
+    validate_certs: false
+    body_format: form-urlencoded
+    body:
+      vmid: "{{ lxc_vmid }}"
+      hostname: "{{ lxc_hostname }}"
+      ostemplate: "{{ lxc_ostemplate }}"
+      storage: "{{ lxc_storage }}"
+      password: "{{ lxc_password }}"
+      cores: "{{ lxc_cores }}"
+      memory: "{{ lxc_memory }}"
+      swap: "{{ lxc_swap }}"
+      rootfs: "{{ lxc_storage }}:{{ lxc_disk }}"
+      net0: "name={{ lxc_net_name }},bridge={{ lxc_net_bridge }},ip={{ lxc_net_ip }},gw={{ lxc_net_gw }}"
+      nameserver: "{{ lxc_nameserver }}"
+      onboot: "{{ '1' if lxc_onboot else '0' }}"
+      unprivileged: "{{ '1' if lxc_unprivileged else '0' }}"
+      description: "{{ lxc_description }}"
+      ssh-public-keys: "{{ lxc_ssh_public_keys | join('\\n') if lxc_ssh_public_keys | length > 0 else omit }}"
+      features: "{{ lxc_features | join(',') if lxc_features | length > 0 else omit }}"
+      tags: "{{ lxc_tags | join(';') if lxc_tags | length > 0 else omit }}"
+  register: container_create
+  when: container_check.status == 404
+  delegate_to: localhost
+
+- name: Wait for container creation task to complete
+  uri:
+    url: "https://{{ lxc_api_host }}:8006/api2/json/nodes/{{ lxc_node }}/tasks/{{ container_create.json.data }}/status"
+    method: GET
+    user: "{{ lxc_api_user }}"
+    password: "{{ lxc_api_password }}"
+    validate_certs: false
+  register: task_status
+  until: task_status.json.data.status == "stopped"
+  retries: 30
+  delay: 10
+  when: container_create is changed
+  delegate_to: localhost
+
+- name: Start LXC container
+  uri:
+    url: "https://{{ lxc_api_host }}:8006/api2/json/nodes/{{ lxc_node }}/lxc/{{ lxc_vmid }}/status/start"
+    method: POST
+    user: "{{ lxc_api_user }}"
+    password: "{{ lxc_api_password }}"
+    validate_certs: false
+  when: lxc_state == "started"
+  delegate_to: localhost
+
+- name: Wait for container to be running
+  uri:
+    url: "https://{{ lxc_api_host }}:8006/api2/json/nodes/{{ lxc_node }}/lxc/{{ lxc_vmid }}/status/current"
+    method: GET
+    user: "{{ lxc_api_user }}"
+    password: "{{ lxc_api_password }}"
+    validate_certs: false
+  register: container_status
+  until: container_status.json.data.status == "running"
+  retries: 15
+  delay: 10
+  when: lxc_state == "started"
+  delegate_to: localhost
+
+- name: Wait for SSH to be available
+  wait_for:
+    host: "{{ lxc_net_ip.split('/')[0] }}"
+    port: 22
+    timeout: 300
+  when: lxc_state == "started"
+  delegate_to: localhost

@@ -1,0 +1,90 @@
+---
+# Deploy Technitium DNS Server on DNS infrastructure hosts
+# This playbook deploys a production-ready DNS server for the doofus.co domain
+
+- name: Deploy Technitium DNS Server
+  hosts: dns_servers
+  become: yes
+  gather_facts: yes
+  
+  vars:
+    # Deployment configuration
+    deployment_name: "Technitium DNS Server"
+    deployment_timestamp: "{{ ansible_date_time.iso8601 }}"
+    
+  pre_tasks:
+    - name: Verify target hosts
+      debug:
+        msg: 
+          - "Deploying {{ deployment_name }} to: {{ inventory_hostname }}"
+          - "Target IP: {{ ansible_host }}"
+          - "DNS role: {{ dns_role }}"
+          - "Hardware profile: {{ hardware_profile }}"
+    
+    - name: Check system requirements
+      assert:
+        that:
+          - ansible_distribution in ['Ubuntu', 'Debian']
+          - (ansible_distribution == 'Ubuntu' and ansible_distribution_major_version | int >= 18) or 
+            (ansible_distribution == 'Debian' and ansible_distribution_major_version | int >= 10)
+          - ansible_memtotal_mb >= 1024
+        fail_msg: "System does not meet minimum requirements for Technitium DNS"
+        success_msg: "System requirements verified"
+    
+    - name: Verify network connectivity
+      uri:
+        url: "https://docker.io"
+        method: HEAD
+        timeout: 10
+      register: connectivity_check
+      failed_when: false
+    
+    - name: Ensure internet connectivity
+      fail:
+        msg: "Internet connectivity required for Docker image download"
+      when: connectivity_check.status != 200
+
+  roles:
+    - role: ../../roles/common
+      tags: [common, dependencies]
+      
+    - role: ../../roles/technitium_dns
+      tags: [technitium, dns]
+
+  post_tasks:
+    - name: Create deployment record
+      copy:
+        content: |
+          Deployment: {{ deployment_name }}
+          Timestamp: {{ deployment_timestamp }}
+          Host: {{ inventory_hostname }} ({{ ansible_host }})
+          Image: {{ technitium_image }}
+          Domain: {{ technitium_domain }}
+          Web Console: http://{{ ansible_default_ipv4.address }}:{{ technitium_web_port }}
+          DNS Server: {{ ansible_default_ipv4.address }}:{{ technitium_dns_port }}
+          Admin User: {{ technitium_admin_user }}
+          Zones Configured: {{ technitium_zones | length }}
+        dest: "{{ technitium_data_path }}/deployment_info.txt"
+        mode: '0644'
+      tags: [info]
+    
+    - name: Display deployment summary
+      debug:
+        msg:
+          - "🎯 {{ deployment_name }} deployment completed successfully!"
+          - ""
+          - "📊 Deployment Details:"
+          - "   Host: {{ inventory_hostname }} ({{ ansible_host }})"
+          - "   DNS Service: {{ ansible_default_ipv4.address }}:{{ technitium_dns_port }}"
+          - "   Web Console: http://{{ ansible_default_ipv4.address }}:{{ technitium_web_port }}"
+          - ""
+          - "🔐 Access Information:"
+          - "   Admin User: {{ technitium_admin_user }}"
+          - "   Password Location: {{ technitium_data_path }}/admin_password.txt"
+          - ""
+          - "🏗️ Next Steps:"
+          - "   1. Access web console to verify configuration"
+          - "   2. Test DNS resolution: dig @{{ ansible_default_ipv4.address }} {{ technitium_domain }}"
+          - "   3. Update network DHCP to use {{ ansible_default_ipv4.address }} as DNS server"
+          - "   4. Configure reverse DNS zones if needed"
+      tags: [info]

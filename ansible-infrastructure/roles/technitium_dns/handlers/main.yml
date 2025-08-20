@@ -1,0 +1,29 @@
+---
+# Technitium DNS Server handlers
+
+- name: "start docker service"
+  systemd:
+    name: docker
+    state: started
+    enabled: yes
+
+- name: "restart technitium dns"
+  docker_container:
+    name: "{{ technitium_container_name }}"
+    state: restarted
+
+- name: "restart systemd resolved on failure"
+  systemd:
+    name: systemd-resolved
+    state: started
+    enabled: yes
+  when: ansible_failed_task is defined
+
+- name: "restore resolv conf on failure"
+  copy:
+    src: /etc/resolv.conf.backup
+    dest: /etc/resolv.conf
+    remote_src: yes
+  when: 
+    - ansible_failed_task is defined
+    - technitium_backup_resolv_conf

@@ -1,0 +1,89 @@
+---
+# Dell iDRAC Fan Controller deployment
+
+- name: Validate required configuration
+  assert:
+    that:
+      - dell_idrac_host != ""
+      - dell_idrac_password != ""
+      - dell_idrac_fan_speed | int >= 5
+      - dell_idrac_fan_speed | int <= 100
+    fail_msg: "iDRAC host, password, and valid fan speed (5-100%) must be configured"
+    success_msg: "Configuration validated"
+
+- name: Ensure Docker is installed and running
+  systemd:
+    name: docker
+    state: started
+    enabled: yes
+
+- name: Stop existing fan controller container
+  docker_container:
+    name: "{{ dell_fan_controller_container_name }}"
+    state: absent
+  ignore_errors: yes
+
+- name: Pull Dell iDRAC fan controller image
+  docker_image:
+    name: "{{ dell_fan_controller_image }}"
+    source: pull
+    force_source: yes
+
+- name: Deploy Dell iDRAC fan controller container
+  docker_container:
+    name: "{{ dell_fan_controller_container_name }}"
+    image: "{{ dell_fan_controller_image }}"
+    restart_policy: "{{ dell_fan_controller_restart_policy }}"
+    network_mode: "{{ dell_fan_controller_network_mode }}"
+    env:
+      IDRAC_HOST: "{{ dell_idrac_host }}"
+      IDRAC_USERNAME: "{{ dell_idrac_username }}"
+      IDRAC_PASSWORD: "{{ dell_idrac_password }}"
+      FAN_SPEED: "{{ dell_idrac_fan_speed }}"
+      CHECK_INTERVAL: "{{ dell_fan_controller_check_interval }}"
+      LOCAL_TEMP_THRESHOLD: "{{ dell_fan_controller_local_temp_threshold }}"
+      LOG_LEVEL: "{{ dell_fan_controller_log_level }}"
+      KEEP_THIRD_PARTY_COOLING_RESPONSE: "{{ dell_fan_controller_keep_third_party_cooling_response | lower }}"
+      DISABLE_THIRD_PARTY_PCIE_CARD_DELL_DEFAULT_COOLING_RESPONSE: "{{ dell_fan_controller_disable_third_party_pcie_card_dell_default_cooling_response | lower }}"
+      ENABLE_SAFETY_MODE: "{{ dell_fan_controller_enable_safety_mode | lower }}"
+    state: started
+  register: fan_controller_result
+
+- name: Wait for fan controller to initialize
+  pause:
+    seconds: 10
+
+- name: Check fan controller logs
+  command: "docker logs {{ dell_fan_controller_container_name }} --tail 20"
+  register: fan_controller_logs
+  changed_when: false
+
+- name: Display fan controller status
+  debug:
+    msg:
+      - "Dell iDRAC Fan Controller Status:"
+      - "Container: {{ 'Running' if fan_controller_result.container.State.Status == 'running' else 'Failed' }}"
+      - "iDRAC Host: {{ dell_idrac_host }}"
+      - "Fan Speed: {{ dell_idrac_fan_speed }}%"
+      - "Check Interval: {{ dell_fan_controller_check_interval }}s"
+      - "Recent logs:"
+      - "{{ fan_controller_logs.stdout_lines[-5:] | join('\n') }}"
+
+- name: Create fan controller monitoring script
+  template:
+    src: monitor-fan-controller.sh.j2
+    dest: /usr/local/bin/monitor-fan-controller.sh
+    mode: '0755'
+
+- name: Create systemd service for fan controller monitoring
+  template:
+    src: dell-fan-controller.service.j2
+    dest: /etc/systemd/system/dell-fan-controller-monitor.service
+    mode: '0644'
+  notify: reload systemd
+
+- name: Enable fan controller monitoring service
+  systemd:
+    name: dell-fan-controller-monitor.service
+    enabled: yes
+    daemon_reload: yes

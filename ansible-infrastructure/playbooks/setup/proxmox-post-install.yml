@@ -1,0 +1,214 @@
+---
+# Proxmox post-installation configuration
+# Based on https://github.com/community-scripts/ProxmoxVE post-pve-install.sh
+# Optimizes Proxmox for home lab and removes enterprise nag screens
+
+- name: Proxmox Post-Installation Configuration
+  hosts: proxmox
+  become: yes
+  gather_facts: yes
+  
+  vars:
+    proxmox_post_install_timestamp: "{{ ansible_date_time.iso8601 }}"
+    
+  pre_tasks:
+    - name: Verify this is a Proxmox system
+      stat:
+        path: /etc/pve
+      register: pve_check
+      
+    - name: Fail if not Proxmox system
+      fail:
+        msg: "This playbook should only run on Proxmox VE systems"
+      when: not pve_check.stat.exists
+
+  tasks:
+    - name: Find all repository files
+      find:
+        paths: /etc/apt/sources.list.d/
+        patterns: "*enterprise*,*ceph*"
+        file_type: file
+      register: enterprise_repo_files
+
+    - name: Disable enterprise repositories (.list format)
+      replace:
+        path: "{{ item.path }}"
+        regexp: '^deb'
+        replace: '# deb'
+        backup: yes
+      loop: "{{ enterprise_repo_files.files }}"
+      when: item.path.endswith('.list')
+      ignore_errors: yes
+
+    - name: Disable enterprise repositories (.sources format)
+      copy:
+        content: |
+          # Proxmox enterprise repository disabled by Ansible
+          # Original file backed up with .backup extension
+          # To re-enable, restore from backup or reinstall proxmox-ve package
+        dest: "{{ item.path }}"
+        backup: yes
+      loop: "{{ enterprise_repo_files.files }}"
+      when: item.path.endswith('.sources')
+      ignore_errors: yes
+
+    - name: Create sources.list if it doesn't exist
+      file:
+        path: /etc/apt/sources.list
+        state: touch
+        mode: '0644'
+
+    - name: Add Debian base repositories
+      blockinfile:
+        path: /etc/apt/sources.list
+        block: |
+          # Debian {{ ansible_distribution_release }} base repositories
+          deb http://deb.debian.org/debian {{ ansible_distribution_release }} main contrib non-free
+          deb http://deb.debian.org/debian {{ ansible_distribution_release }}-updates main contrib non-free
+          deb http://security.debian.org/debian-security {{ ansible_distribution_release }}-security main contrib non-free
+        marker: "# {mark} ANSIBLE MANAGED - Debian base repos"
+        state: present
+        create: yes
+
+    - name: Add Proxmox no-subscription repository
+      apt_repository:
+        repo: "deb http://download.proxmox.com/debian/pve {{ ansible_distribution_release }} pve-no-subscription"
+        state: present
+        filename: pve-no-subscription
+
+    # Ceph repository not needed for basic Proxmox setup
+    # Add manually if Ceph storage is required
+
+    - name: Remove subscription nag from web interface
+      replace:
+        path: /usr/share/javascript/proxmox-widget-toolkit/proxmoxlib.js
+        regexp: "Ext.Msg.show\\(\\{[^}]*'No valid subscription'[^}]*\\}\\);"
+        replace: "void(0);"
+        backup: yes
+      notify: restart pveproxy
+
+    - name: Configure package repository priorities
+      copy:
+        content: |
+          Package: *
+          Pin: origin download.proxmox.com
+          Pin-Priority: 1001
+        dest: /etc/apt/preferences.d/no-subscription
+        mode: '0644'
+
+    - name: Update package cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+
+    - name: Upgrade system packages
+      apt:
+        upgrade: dist
+        autoremove: yes
+        autoclean: yes
+      register: upgrade_result
+
+    - name: Configure kernel parameters for stability
+      sysctl:
+        name: "{{ item.name }}"
+        value: "{{ item.value }}"
+        state: present
+        reload: yes
+      loop:
+        - { name: "vm.swappiness", value: "10" }
+        - { name: "net.core.rmem_max", value: "16777216" }
+        - { name: "net.core.wmem_max", value: "16777216" }
+        - { name: "net.ipv4.tcp_congestion_control", value: "bbr" }
+
+    - name: Configure CPU governor for performance
+      lineinfile:
+        path: /etc/default/grub
+        regexp: '^GRUB_CMDLINE_LINUX_DEFAULT='
+        line: 'GRUB_CMDLINE_LINUX_DEFAULT="quiet intel_pstate=active"'
+        backup: yes
+      notify: update grub
+      when: ansible_processor[1] is match(".*Intel.*")
+
+    - name: Set timezone
+      timezone:
+        name: "{{ ansible_timezone | default('UTC') }}"
+
+    - name: Configure log rotation for Proxmox logs
+      template:
+        src: proxmox-logrotate.j2
+        dest: /etc/logrotate.d/proxmox-enhanced
+        mode: '0644'
+
+    - name: Enable and start essential services
+      systemd:
+        name: "{{ item }}"
+        state: started
+        enabled: yes
+      loop:
+        - pveproxy
+        - pvedaemon
+        - pvestatd
+        - pvescheduler
+
+    - name: Create post-install completion marker
+      copy:
+        content: |
+          Proxmox Post-Installation Completed
+          ===================================
+          
+          Timestamp: {{ proxmox_post_install_timestamp }}
+          Host: {{ inventory_hostname }} ({{ ansible_host }})
+          Proxmox Version: {{ ansible_local.pve.version | default('Unknown') }}
+          
+          Changes Applied:
+          - Enterprise repositories disabled
+          - No-subscription repositories enabled
+          - Subscription nag removed from web interface
+          - System packages upgraded
+          - Kernel parameters optimized
+          - CPU governor configured (Intel systems)
+          - Log rotation enhanced
+          
+          Next Steps:
+          - Access web interface at https://{{ ansible_host }}:8006
+          - Configure storage, networking, and clustering as needed
+          - Install templates and create VMs/containers
+        dest: /root/proxmox-post-install-complete.txt
+        mode: '0644'
+
+  handlers:
+    - name: restart pveproxy
+      systemd:
+        name: pveproxy
+        state: restarted
+
+    - name: update grub
+      command: update-grub
+      notify: reboot required
+
+    - name: reboot required
+      debug:
+        msg: "Reboot required for GRUB changes to take effect"
+
+  post_tasks:
+    - name: Display post-install summary
+      debug:
+        msg:
+          - "🎯 Proxmox Post-Installation Completed!"
+          - ""
+          - "📊 System Status:"
+          - "   Host: {{ inventory_hostname }} ({{ ansible_host }})"
+          - "   Proxmox Version: {{ ansible_local.pve.version | default('Unknown') }}"
+          - "   Packages: {{ 'Updated' if upgrade_result.changed else 'Up to date' }}"
+          - ""
+          - "🔧 Optimizations Applied:"
+          - "   ✅ Enterprise nag removed"
+          - "   ✅ No-subscription repos configured"
+          - "   ✅ System optimized for home lab use"
+          - "   ✅ Kernel parameters tuned"
+          - ""
+          - "🌐 Access:"
+          - "   Web Interface: https://{{ ansible_host }}:8006"
+          - "   SSH: {{ ansible_user }}@{{ ansible_host }}"
+          - ""
+          - "📄 Details: /root/proxmox-post-install-complete.txt"

@@ -1,0 +1,127 @@
+---
+- name: Deploy GitLab stack with Caddy and Tailscale integration
+  hosts: rawls
+  become: yes
+  gather_facts: yes
+  
+  vars:
+    # Phase 1: GitLab only (Phase 2: Semaphore, Phase 3: Kestra)
+    enable_semaphore: false
+    enable_kestra: false
+    enable_tailscale_domains: true
+    
+    # Override defaults for homelab environment
+    gitlab_external_url: "https://gitlab.doofus.co"
+    gitlab_ssh_port: 2222
+    
+    # Tailscale configuration  
+    tailscale_hostname: "rawls"
+    
+    # Security settings
+    enable_ufw: true
+    enable_fail2ban: true
+    enable_gitlab_backups: true
+    
+    # Generate secure passwords if not in vault
+    gitlab_initial_root_password: "{{ vault_gitlab_root_password | default(lookup('password', '/tmp/gitlab_root_password length=16 chars=ascii_letters,digits')) }}"
+    
+  pre_tasks:
+    - name: Verify target host is correct
+      assert:
+        that:
+          - ansible_host == "10.203.3.47"
+          - inventory_hostname == "rawls"
+        fail_msg: "This playbook should only run on rawls (10.203.3.47)"
+        success_msg: "✅ Target host verification passed"
+        
+    - name: Display deployment information
+      debug:
+        msg: |
+          🚀 Starting GitLab Stack Deployment
+          ===================================
+          
+          📋 Target: {{ inventory_hostname }} ({{ ansible_host }})
+          🌐 External URL: {{ gitlab_external_url }}
+          🏷️  Tailscale Hostname: {{ tailscale_hostname }}
+          📊 Phase 1: GitLab + Caddy
+          🔒 Security: UFW + fail2ban enabled
+          💾 Backups: {{ 'enabled' if enable_gitlab_backups else 'disabled' }}
+          
+          ⏱️  Expected deployment time: 10-15 minutes
+          
+  roles:
+    - role: gitlab_stack
+      tags:
+        - gitlab
+        - docker
+        - caddy
+        - security
+        
+  post_tasks:
+    - name: Wait for GitLab to be fully ready
+      uri:
+        url: "http://{{ ansible_host }}/users/sign_in"
+        method: GET
+        status_code: 200
+      register: gitlab_ready
+      until: gitlab_ready.status == 200
+      retries: 30
+      delay: 30
+      
+    - name: Save important deployment information
+      copy:
+        dest: "/opt/gitlab-deployment-info.txt"
+        content: |
+          GitLab Stack Deployment Information
+          ==================================
+          
+          Deployment Date: {{ ansible_date_time.iso8601 }}
+          Deployed by: Ansible ({{ ansible_user }})
+          Target Host: {{ inventory_hostname }} ({{ ansible_host }})
+          
+          Access Information:
+          - GitLab URL: {{ gitlab_external_url }}
+          - GitLab SSH: ssh://git@{{ ansible_host }}:{{ gitlab_ssh_port }}
+          - Root Password: {{ gitlab_initial_root_password }}
+          
+          File Locations:
+          - Compose Directory: {{ gitlab_compose_dir | default('/opt/gitlab-stack') }}
+          - Data Directory: {{ gitlab_data_dir | default('/opt/gitlab-stack/data') }}
+          - Config Directory: {{ gitlab_config_dir | default('/opt/gitlab-stack/config') }}
+          - Logs Directory: {{ gitlab_logs_dir | default('/opt/gitlab-stack/logs') }}
+          
+          Management Commands:
+          - View logs: cd {{ gitlab_compose_dir | default('/opt/gitlab-stack') }} && docker compose logs -f
+          - Restart: cd {{ gitlab_compose_dir | default('/opt/gitlab-stack') }} && docker compose restart
+          - Update: cd {{ gitlab_compose_dir | default('/opt/gitlab-stack') }} && docker compose pull && docker compose up -d
+          
+          Next Phase Enablement:
+          - Phase 2 (Semaphore): Set enable_semaphore: true in playbook
+          - Phase 3 (Kestra): Set enable_kestra: true in playbook
+          
+        mode: '0644'
+        
+    - name: Display final success message
+      debug:
+        msg: |
+          
+          🎉 GitLab Stack Deployment SUCCESSFUL! 
+          ======================================
+          
+          ✅ GitLab CE is running and ready
+          ✅ Caddy reverse proxy configured  
+          ✅ Tailscale magic domains enabled
+          ✅ Security hardening applied
+          ✅ Automated backups configured
+          
+          🌐 Access your GitLab instance:
+          - External: {{ gitlab_external_url }}
+          - Tailscale: https://gitlab.{{ tailscale_hostname }}.ts.net
+          
+          🔐 Initial Login:
+          - Username: root
+          - Password: {{ gitlab_initial_root_password }}
+          
+          📝 Important: Save your root password securely!
+          
+          🚀 Ready for development and CI/CD workflows!

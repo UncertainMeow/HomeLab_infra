@@ -1,0 +1,102 @@
+---
+# Test connectivity and basic setup for DNS servers
+# Run this before deploying Technitium DNS
+
+- name: Test DNS Server Connectivity and Prerequisites
+  hosts: dns_servers
+  gather_facts: yes
+  
+  tasks:
+    - name: Test basic connectivity
+      ping:
+      register: ping_result
+      
+    - name: Display connection info
+      debug:
+        msg:
+          - "✓ Successfully connected to {{ inventory_hostname }}"
+          - "   IP: {{ ansible_host }}"
+          - "   OS: {{ ansible_distribution }} {{ ansible_distribution_version }}"
+          - "   Memory: {{ ansible_memtotal_mb }}MB"
+          - "   Architecture: {{ ansible_architecture }}"
+
+    - name: Check if user has sudo privileges
+      become: yes
+      command: whoami
+      register: sudo_test
+      changed_when: false
+
+    - name: Verify sudo access
+      debug:
+        msg: "✓ Sudo access confirmed (running as {{ sudo_test.stdout }})"
+
+    - name: Check available disk space
+      shell: "df -h / | tail -1 | awk '{print $4}'"
+      register: disk_space
+      changed_when: false
+
+    - name: Display system resources
+      debug:
+        msg:
+          - "System Resources:"
+          - "  Available disk space: {{ disk_space.stdout }}"
+          - "  Memory: {{ ansible_memtotal_mb }}MB"
+          - "  CPU cores: {{ ansible_processor_vcpus }}"
+
+    - name: Test internet connectivity
+      uri:
+        url: "https://docker.io"
+        method: HEAD
+        timeout: 10
+      register: internet_test
+      failed_when: false
+
+    - name: Display connectivity status
+      debug:
+        msg: "{{ '✓ Internet connectivity confirmed' if internet_test.status == 200 else '⚠ Internet connectivity issue - status: ' + (internet_test.status | string) }}"
+
+    - name: Check if Docker is installed
+      command: docker --version
+      register: docker_check
+      failed_when: false
+      changed_when: false
+
+    - name: Display Docker status
+      debug:
+        msg: "{{ '✓ Docker installed: ' + docker_check.stdout if docker_check.rc == 0 else '⚠ Docker not installed' }}"
+
+    - name: Check if systemd-resolved is running
+      systemd:
+        name: systemd-resolved
+      register: resolved_status
+      failed_when: false
+
+    - name: Display DNS service status
+      debug:
+        msg: "{{ '⚠ systemd-resolved is running (will be disabled during deployment)' if resolved_status.status.ActiveState == 'active' else '✓ systemd-resolved not active' }}"
+
+    - name: Check port 53 availability
+      wait_for:
+        port: 53
+        host: "{{ ansible_default_ipv4.address }}"
+        timeout: 1
+      register: port53_check
+      failed_when: false
+
+    - name: Display port 53 status
+      debug:
+        msg: "{{ '⚠ Port 53 is occupied (will be cleared during deployment)' if port53_check.elapsed < 1 else '✓ Port 53 is available' }}"
+
+    - name: Summary
+      debug:
+        msg:
+          - ""
+          - "🏁 Connectivity Test Summary for {{ inventory_hostname }}"
+          - "================================"
+          - "Connection: ✓ Success"
+          - "Sudo Access: ✓ Confirmed"
+          - "Internet: {{ '✓ Available' if internet_test.status == 200 else '⚠ Limited' }}"
+          - "Docker: {{ '✓ Installed' if docker_check.rc == 0 else '⚠ Needs installation' }}"
+          - "Port 53: {{ '✓ Available' if port53_check.elapsed >= 1 else '⚠ Occupied' }}"
+          - ""
+          - "Ready for DNS deployment: {{ 'YES' if (internet_test.status == 200) else 'NEEDS ATTENTION' }}"

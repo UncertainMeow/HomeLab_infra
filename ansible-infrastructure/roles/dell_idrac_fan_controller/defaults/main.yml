@@ -1,0 +1,26 @@
+---
+# Dell iDRAC Fan Controller configuration
+dell_fan_controller_image: "tigerblue77/dell_idrac_fan_controller:latest"
+dell_fan_controller_container_name: "dell-idrac-fan-controller"
+
+# iDRAC connection settings (set these in host_vars or group_vars)
+dell_idrac_host: ""  # e.g., "10.203.3.50"
+dell_idrac_username: "root"
+dell_idrac_password: ""  # Store in vault
+dell_idrac_fan_speed: "5"  # Percentage (5-100)
+
+# Container configuration
+dell_fan_controller_restart_policy: "unless-stopped"
+dell_fan_controller_network_mode: "host"
+
+# Monitoring settings
+dell_fan_controller_check_interval: 30  # seconds
+dell_fan_controller_local_temp_threshold: 50  # °C
+
+# Logging
+dell_fan_controller_log_level: "INFO"
+dell_fan_controller_keep_third_party_cooling_response: true
+
+# Safety settings
+dell_fan_controller_disable_third_party_pcie_card_dell_default_cooling_response: false
+dell_fan_controller_enable_safety_mode: true

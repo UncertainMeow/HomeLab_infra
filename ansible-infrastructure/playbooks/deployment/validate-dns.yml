@@ -1,0 +1,117 @@
+---
+# Validate Technitium DNS Server deployment and configuration
+# This playbook performs comprehensive DNS validation tests
+
+- name: Validate DNS Server Deployment
+  hosts: dns_servers
+  become: yes
+  gather_facts: yes
+  
+  vars:
+    test_domains:
+      - "{{ technitium_domain }}"
+      - "google.com"
+      - "cloudflare.com"
+    
+    test_records:
+      - { name: "{{ technitium_domain }}", type: "A" }
+      - { name: "rseau.{{ technitium_domain }}", type: "A" }
+      - { name: "socrates.{{ technitium_domain }}", type: "A" }
+      - { name: "ns1.{{ technitium_domain }}", type: "A" }
+      - { name: "{{ technitium_domain }}", type: "NS" }
+
+  tasks:
+    - name: Check if Technitium DNS container is running
+      docker_container_info:
+        name: "{{ technitium_container_name }}"
+      register: container_info
+      
+    - name: Verify container is running
+      assert:
+        that:
+          - container_info.exists
+          - container_info.container.State.Status == "running"
+        fail_msg: "Technitium DNS container is not running"
+        success_msg: "✓ Technitium DNS container is running"
+
+    - name: Check DNS service ports
+      wait_for:
+        port: "{{ item }}"
+        host: "{{ ansible_default_ipv4.address }}"
+        timeout: 5
+      loop:
+        - "{{ technitium_dns_port }}"
+        - "{{ technitium_web_port }}"
+      register: port_checks
+
+    - name: Test DNS resolution for external domains
+      command: "dig @{{ ansible_default_ipv4.address }} +short {{ item }}"
+      register: external_dns_tests
+      loop: "{{ test_domains[1:] }}"  # Skip our local domain
+      changed_when: false
+      failed_when: external_dns_tests.stdout == ""
+
+    - name: Display external DNS test results
+      debug:
+        msg: "✓ External DNS resolution working for {{ item.item }}: {{ item.stdout_lines[0] | default('No result') }}"
+      loop: "{{ external_dns_tests.results }}"
+      when: item.stdout_lines | length > 0
+
+    - name: Test local domain records
+      command: "dig @{{ ansible_default_ipv4.address }} +short {{ item.name }} {{ item.type }}"
+      register: local_dns_tests
+      loop: "{{ test_records }}"
+      changed_when: false
+      failed_when: false  # Don't fail if records aren't configured yet
+
+    - name: Display local DNS test results
+      debug:
+        msg: "{{ '✓' if item.stdout_lines | length > 0 else '⚠' }} {{ item.item.name }} {{ item.item.type }}: {{ item.stdout_lines[0] | default('No record found') }}"
+      loop: "{{ local_dns_tests.results }}"
+
+    - name: Check web console accessibility
+      uri:
+        url: "http://{{ ansible_default_ipv4.address }}:{{ technitium_web_port }}"
+        method: GET
+        status_code: 200
+        timeout: 10
+      register: web_console_check
+
+    - name: Verify admin password file exists
+      stat:
+        path: "{{ technitium_data_path }}/admin_password.txt"
+      register: password_file
+
+    - name: Read admin password
+      slurp:
+        src: "{{ technitium_data_path }}/admin_password.txt"
+      register: admin_password_content
+      when: password_file.stat.exists
+
+    - name: Generate validation report
+      template:
+        src: dns_validation_report.j2
+        dest: "{{ technitium_data_path }}/validation_report.txt"
+        mode: '0644'
+      vars:
+        validation_timestamp: "{{ ansible_date_time.iso8601 }}"
+        container_status: "{{ container_info.container.State.Status }}"
+        external_tests: "{{ external_dns_tests.results }}"
+        local_tests: "{{ local_dns_tests.results }}"
+        web_console_status: "{{ 'Accessible' if web_console_check.status == 200 else 'Not accessible' }}"
+        admin_password: "{{ admin_password_content.content | b64decode | trim if password_file.stat.exists else 'Not found' }}"
+
+    - name: Display validation summary
+      debug:
+        msg:
+          - "🔍 DNS Server Validation Summary"
+          - "================================"
+          - "Container Status: {{ '✓ Running' if container_info.container.State.Status == 'running' else '✗ Not running' }}"
+          - "DNS Port ({{ technitium_dns_port }}): {{ '✓ Open' if port_checks.results[0].elapsed < 5 else '✗ Closed' }}"
+          - "Web Port ({{ technitium_web_port }}): {{ '✓ Open' if port_checks.results[1].elapsed < 5 else '✗ Closed' }}"
+          - "External DNS: {{ '✓ Working' if external_dns_tests.results | selectattr('stdout_lines', 'defined') | list | length > 0 else '✗ Failed' }}"
+          - "Web Console: {{ '✓ Accessible' if web_console_check.status == 200 else '✗ Not accessible' }}"
+          - "Admin Password: {{ '✓ Available' if password_file.stat.exists else '✗ Missing' }}"
+          - ""
+          - "📄 Full report: {{ technitium_data_path }}/validation_report.txt"
+          - "🌐 Web Console: http://{{ ansible_default_ipv4.address }}:{{ technitium_web_port }}"

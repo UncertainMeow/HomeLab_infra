@@ -1,0 +1,12 @@
+/var/log/pve/*.log {
+    daily
+    rotate 30
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 0640 root adm
+    postrotate
+        systemctl reload-or-restart pveproxy pvedaemon pvestatd pvescheduler 2>/dev/null || true
+    endscript
+}

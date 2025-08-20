@@ -1,0 +1,34 @@
+---
+# Handlers for GitLab stack role
+
+- name: restart docker
+  systemd:
+    name: docker
+    state: restarted
+  become: yes
+
+- name: restart fail2ban
+  systemd:
+    name: fail2ban
+    state: restarted
+  become: yes
+  when: enable_fail2ban is defined and enable_fail2ban
+
+- name: reload ufw
+  ufw:
+    state: reloaded
+  become: yes
+  when: enable_ufw is defined and enable_ufw
+
+- name: restart gitlab stack
+  command: "{{ docker_compose_cmd }} restart"
+  args:
+    chdir: "{{ gitlab_compose_dir }}"
+  become_user: "{{ ansible_user }}"
+
+- name: reload caddy
+  command: "{{ docker_compose_cmd }} exec caddy caddy reload --config /etc/caddy/Caddyfile"
+  args:
+    chdir: "{{ gitlab_compose_dir }}"
+  become_user: "{{ ansible_user }}"
+  ignore_errors: yes

@@ -1,0 +1,20 @@
+---
+# Proxmox LXC container management
+
+- name: Include container creation tasks
+  include_tasks: create_container.yml
+  tags: [lxc, create]
+
+- name: Include post-creation configuration
+  include_tasks: configure_container.yml
+  tags: [lxc, configure]
+  when: lxc_state == "started"
+
+- name: Display container information
+  debug:
+    msg:
+      - "LXC container {{ lxc_hostname }} ({{ lxc_vmid }}) ready"
+      - "IP Address: {{ lxc_net_ip }}"
+      - "SSH Access: {{ 'Enabled' if lxc_ssh_public_keys | length > 0 else 'Password only' }}"
+      - "Resources: {{ lxc_cores }} cores, {{ lxc_memory }}MB RAM, {{ lxc_disk }}GB disk"
+  tags: [lxc, info]

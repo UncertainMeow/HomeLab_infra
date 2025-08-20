@@ -1,0 +1,29 @@
+---
+# Technitium DNS Server default configuration
+technitium_install_common_deps: true
+technitium_container_name: "technitium-dns"
+technitium_image: "{{ technitium.image | default('technitium/dns-server:latest') }}"
+technitium_data_path: "{{ technitium.data_path | default('/opt/technitium') }}"
+technitium_web_port: "{{ technitium.web_port | default(5380) }}"
+technitium_dns_port: "{{ technitium.dns_port | default(53) }}"
+
+# System configuration
+technitium_disable_systemd_resolved: "{{ system.disable_systemd_resolved | default(true) }}"
+technitium_backup_resolv_conf: "{{ system.backup_original_resolv_conf | default(true) }}"
+
+# Docker configuration
+technitium_restart_policy: "{{ docker.restart_policy | default('unless-stopped') }}"
+technitium_network_mode: "{{ docker.network_mode | default('host') }}"
+
+# DNS configuration
+technitium_domain: "{{ dns_server_config.domain | default('local') }}"
+technitium_network: "{{ dns_server_config.network | default('192.168.1.0/24') }}"
+
+# Admin credentials (will be generated if not provided)
+technitium_admin_user: "{{ technitium.admin_user | default('admin') }}"
+technitium_generate_admin_password: true
+technitium_admin_password_length: 16
+
+# Zone configuration
+technitium_zones: "{{ technitium.zones | default([]) }}"
+technitium_settings: "{{ technitium.settings | default({}) }}"

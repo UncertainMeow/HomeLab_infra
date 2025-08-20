@@ -1,0 +1,57 @@
+#!/bin/bash
+# Dell iDRAC Fan Controller monitoring script
+# Ensures the container stays running and restarts if needed
+
+CONTAINER_NAME="{{ dell_fan_controller_container_name }}"
+IMAGE_NAME="{{ dell_fan_controller_image }}"
+LOG_FILE="/var/log/dell-fan-controller-monitor.log"
+
+log_message() {
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" | tee -a "$LOG_FILE"
+}
+
+check_container() {
+    if ! docker ps | grep -q "$CONTAINER_NAME"; then
+        log_message "WARNING: Fan controller container not running, attempting restart..."
+        
+        # Stop any existing container
+        docker stop "$CONTAINER_NAME" 2>/dev/null || true
+        docker rm "$CONTAINER_NAME" 2>/dev/null || true
+        
+        # Start new container
+        docker run -d \
+            --name "$CONTAINER_NAME" \
+            --restart unless-stopped \
+            --network host \
+            -e IDRAC_HOST="{{ dell_idrac_host }}" \
+            -e IDRAC_USERNAME="{{ dell_idrac_username }}" \
+            -e IDRAC_PASSWORD="{{ dell_idrac_password }}" \
+            -e FAN_SPEED="{{ dell_idrac_fan_speed }}" \
+            -e CHECK_INTERVAL="{{ dell_fan_controller_check_interval }}" \
+            -e LOCAL_TEMP_THRESHOLD="{{ dell_fan_controller_local_temp_threshold }}" \
+            -e LOG_LEVEL="{{ dell_fan_controller_log_level }}" \
+            -e KEEP_THIRD_PARTY_COOLING_RESPONSE="{{ dell_fan_controller_keep_third_party_cooling_response | lower }}" \
+            -e DISABLE_THIRD_PARTY_PCIE_CARD_DELL_DEFAULT_COOLING_RESPONSE="{{ dell_fan_controller_disable_third_party_pcie_card_dell_default_cooling_response | lower }}" \
+            -e ENABLE_SAFETY_MODE="{{ dell_fan_controller_enable_safety_mode | lower }}" \
+            "$IMAGE_NAME"
+        
+        if [ $? -eq 0 ]; then
+            log_message "SUCCESS: Fan controller container restarted"
+        else
+            log_message "ERROR: Failed to restart fan controller container"
+        fi
+    fi
+}
+
+# Check if Docker is running
+if ! systemctl is-active --quiet docker; then
+    log_message "ERROR: Docker service is not running"
+    exit 1
+fi
+
+# Check container status
+check_container
+
+# Log current status
+CONTAINER_STATUS=$(docker ps --filter "name=$CONTAINER_NAME" --format "table {{.Names}}\t{{.Status}}")
+log_message "Container status: $CONTAINER_STATUS"

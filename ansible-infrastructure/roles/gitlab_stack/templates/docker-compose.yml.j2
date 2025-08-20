@@ -1,0 +1,134 @@
+version: '3.8'
+
+services:
+  # Caddy reverse proxy with automatic HTTPS
+  caddy:
+    image: caddy:2-alpine
+    container_name: caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - gitlab-network
+    depends_on:
+      - gitlab
+
+  # GitLab CE - Phase 1
+  gitlab:
+    image: gitlab/gitlab-ce:latest
+    container_name: gitlab
+    restart: unless-stopped
+    hostname: '{{ gitlab_external_url.split("://")[1] }}'
+    environment:
+      GITLAB_OMNIBUS_CONFIG: |
+        external_url '{{ gitlab_external_url }}'
+        gitlab_rails['initial_root_password'] = '{{ gitlab_initial_root_password }}'
+        gitlab_rails['gitlab_shell_ssh_port'] = {{ gitlab_ssh_port }}
+        
+        # Trust Caddy reverse proxy
+        nginx['listen_port'] = {{ gitlab_internal_port }}
+        nginx['listen_https'] = false
+        nginx['proxy_set_headers'] = {
+          "Host" => "$$http_host",
+          "X-Real-IP" => "$$remote_addr", 
+          "X-Forwarded-For" => "$$proxy_add_x_forwarded_for",
+          "X-Forwarded-Proto" => "https",
+          "X-Forwarded-Ssl" => "on"
+        }
+        
+        # GitLab CI/CD configuration
+        gitlab_ci['gitlab_ci_all_broken_builds'] = true
+        gitlab_ci['gitlab_ci_add_pusher'] = true
+        
+        # Performance tuning for homelab
+        postgresql['shared_preload_libraries'] = 'pg_stat_statements'
+        postgresql['max_connections'] = 200
+        postgresql['shared_buffers'] = "256MB"
+        
+        # Backup configuration  
+        gitlab_rails['backup_keep_time'] = {{ gitlab_backup_keep_time }}
+        gitlab_rails['backup_path'] = "/var/opt/gitlab/backups"
+    ports:
+      - '{{ gitlab_ssh_external_port }}:22'  # GitLab SSH
+    volumes:
+      - gitlab_config:/etc/gitlab
+      - gitlab_logs:/var/log/gitlab
+      - gitlab_data:/var/opt/gitlab
+    networks:
+      - gitlab-network
+    shm_size: '256m'
+
+{% if enable_semaphore %}
+  # Phase 2: Semaphore for Ansible/Terraform UI
+  semaphore:
+    image: semaphoreui/semaphore:latest
+    container_name: semaphore
+    restart: unless-stopped
+    environment:
+      SEMAPHORE_DB_DIALECT: bolt
+      SEMAPHORE_ADMIN_PASSWORD: ${SEMAPHORE_ADMIN_PASSWORD}
+      SEMAPHORE_ADMIN_NAME: admin
+      SEMAPHORE_ADMIN_EMAIL: {{ semaphore_admin_email }}
+      SEMAPHORE_ADMIN: admin
+      SEMAPHORE_ACCESS_KEY_ENCRYPTION: ${SEMAPHORE_ACCESS_KEY}
+    volumes:
+      - semaphore_data:/etc/semaphore
+    networks:
+      - gitlab-network
+{% endif %}
+
+{% if enable_kestra %}
+  # Phase 3: PostgreSQL for Kestra
+  postgres:
+    image: postgres:15
+    container_name: kestra-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: kestra
+      POSTGRES_USER: kestra
+      POSTGRES_PASSWORD: ${KESTRA_DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - gitlab-network
+
+  # Phase 3: Kestra workflow orchestration
+  kestra:
+    image: kestra/kestra:latest
+    container_name: kestra
+    restart: unless-stopped
+    environment:
+      KESTRA_CONFIGURATION: |
+        datasources:
+          postgres:
+            url: jdbc:postgresql://postgres:5432/kestra
+            driverClassName: org.postgresql.Driver
+            username: kestra
+            password: ${KESTRA_DB_PASSWORD}
+    depends_on:
+      - postgres
+    networks:
+      - gitlab-network
+{% endif %}
+
+volumes:
+  caddy_data:
+  caddy_config:
+  gitlab_config:
+  gitlab_logs:
+  gitlab_data:
+{% if enable_semaphore %}
+  semaphore_data:
+{% endif %}
+{% if enable_kestra %}
+  postgres_data:
+{% endif %}
+
+networks:
+  gitlab-network:
+    external: true

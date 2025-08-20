@@ -1,0 +1,11 @@
+---
+# Dell iDRAC Fan Controller handlers
+
+- name: reload systemd
+  systemd:
+    daemon_reload: yes
+
+- name: restart fan controller
+  docker_container:
+    name: "{{ dell_fan_controller_container_name }}"
+    state: restarted

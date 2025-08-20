@@ -1,0 +1,144 @@
+---
+# Deploy DNS service in LXC container on Proxmox
+# This creates an LXC container and deploys Technitium DNS Server
+
+- name: Create DNS LXC Container
+  hosts: proxmox
+  become: yes
+  gather_facts: yes
+  
+  vars:
+    deployment_name: "DNS LXC Container"
+    dns_container_config:
+      vmid: 103
+      hostname: "dns-lxc"
+      password: "{{ vault_lxc_root_password | default(lookup('password', '/dev/null length=20 chars=ascii_letters,digits,punctuation')) }}"
+      cores: 2
+      memory: 2048
+      disk: 20
+      ip: "10.203.1.3/24"
+      gateway: "10.203.1.1"
+      ssh_keys: "{{ ansible_ssh_public_keys | default([]) }}"
+    
+  pre_tasks:
+    - name: Verify Proxmox host
+      debug:
+        msg:
+          - "Creating {{ deployment_name }} on: {{ inventory_hostname }}"
+          - "Container IP: {{ dns_container_config.ip }}"
+          - "Container hostname: {{ dns_container_config.hostname }}"
+    
+    - name: Check Proxmox API accessibility
+      uri:
+        url: "https://{{ ansible_host }}:8006/api2/json/version"
+        method: GET
+        validate_certs: false
+        timeout: 10
+      register: proxmox_api_check
+      delegate_to: localhost
+
+  roles:
+    - role: ../../roles/proxmox_lxc
+      vars:
+        lxc_vmid: "{{ dns_container_config.vmid }}"
+        lxc_hostname: "{{ dns_container_config.hostname }}"
+        lxc_password: "{{ dns_container_config.password }}"
+        lxc_cores: "{{ dns_container_config.cores }}"
+        lxc_memory: "{{ dns_container_config.memory }}"
+        lxc_disk: "{{ dns_container_config.disk }}"
+        lxc_net_ip: "{{ dns_container_config.ip }}"
+        lxc_net_gw: "{{ dns_container_config.gateway }}"
+        lxc_ssh_public_keys: "{{ dns_container_config.ssh_keys }}"
+        lxc_tags: ["dns", "production", "technitium"]
+        lxc_description: "Technitium DNS Server for doofus.co domain"
+        lxc_api_user: "root@pam"
+        lxc_api_password: "{{ vault_proxmox_password | default('') }}"
+      tags: [lxc, create]
+
+  post_tasks:
+    - name: Add DNS container to inventory for next play
+      add_host:
+        hostname: "dns-lxc"
+        ansible_host: "{{ dns_container_config.ip.split('/')[0] }}"
+        ansible_user: ansible
+        groups: 
+          - dns_servers
+          - lxc_containers
+        dns_role: primary
+        hardware_profile: lxc_container
+        dns_service_ip: "{{ dns_container_config.ip.split('/')[0] }}"
+      changed_when: false
+
+- name: Configure DNS Services in LXC
+  hosts: dns-lxc
+  become: yes
+  gather_facts: yes
+  
+  vars:
+    deployment_name: "Technitium DNS in LXC"
+    
+  pre_tasks:
+    - name: Verify container connectivity
+      debug:
+        msg:
+          - "Configuring {{ deployment_name }} in: {{ inventory_hostname }}"
+          - "Container IP: {{ ansible_host }}"
+          - "DNS Service IP: {{ dns_service_ip }}"
+
+  roles:
+    - role: ../../roles/tailscale
+      vars:
+        tailscale_hostname: "{{ inventory_hostname }}-dns"
+        tailscale_ssh: true
+        tailscale_accept_routes: true
+        tailscale_accept_dns: false
+        tailscale_tags: ["tag:homelab", "tag:dns", "tag:lxc"]
+      tags: [tailscale]
+      
+    - role: ../../roles/technitium_dns
+      vars:
+        technitium_network_mode: "host"
+        # DNS will bind to all interfaces in host mode
+      tags: [technitium, dns]
+
+  post_tasks:
+    - name: Create DNS service deployment record
+      copy:
+        content: |
+          Deployment: {{ deployment_name }}
+          Timestamp: {{ ansible_date_time.iso8601 }}
+          Container: {{ inventory_hostname }} ({{ ansible_host }})
+          DNS Service IP: {{ dns_service_ip }}
+          Web Console: http://{{ ansible_host }}:5380
+          Tailscale Hostname: {{ inventory_hostname }}-dns
+          Domain: {{ technitium_domain }}
+          Zones: {{ technitium_zones | length }}
+        dest: "/opt/dns_deployment.txt"
+        mode: '0644'
+      tags: [info]
+    
+    - name: Display deployment summary
+      debug:
+        msg:
+          - "🎯 {{ deployment_name }} deployment completed!"
+          - ""
+          - "📊 Container Details:"
+          - "   Container: {{ inventory_hostname }} ({{ ansible_host }})"
+          - "   VMID: {{ dns_container_config.vmid }}"
+          - "   Resources: {{ dns_container_config.cores }} cores, {{ dns_container_config.memory }}MB RAM"
+          - ""
+          - "🌐 DNS Services:"
+          - "   DNS Server: {{ ansible_host }}:53"
+          - "   Web Console: http://{{ ansible_host }}:5380"
+          - "   Domain: {{ technitium_domain }}"
+          - ""
+          - "🔐 Access:"
+          - "   SSH: ansible@{{ ansible_host }}"
+          - "   Tailscale: {{ inventory_hostname }}-dns"
+          - "   Web Admin: Check /opt/technitium/admin_password.txt"
+          - ""
+          - "✅ Next Steps:"
+          - "   1. Update DHCP to use {{ ansible_host }} as DNS server"
+          - "   2. Test resolution: dig @{{ ansible_host }} {{ technitium_domain }}"
+          - "   3. Configure Cloudflare for external DNS"
+      tags: [info]

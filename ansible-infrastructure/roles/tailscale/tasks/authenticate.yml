@@ -1,0 +1,64 @@
+---
+# Authenticate Tailscale with auth key
+
+- name: Check if Tailscale is already authenticated
+  command: tailscale status --json
+  register: tailscale_auth_check
+  failed_when: false
+  changed_when: false
+
+- name: Parse Tailscale status
+  set_fact:
+    tailscale_authenticated: "{{ (tailscale_auth_check.stdout | from_json).BackendState == 'Running' }}"
+  when: tailscale_auth_check.rc == 0
+
+- name: Set authentication status for failed check
+  set_fact:
+    tailscale_authenticated: false
+  when: tailscale_auth_check.rc != 0
+
+- name: Authenticate Tailscale
+  command: >
+    tailscale up
+    --reset
+    --auth-key={{ tailscale_auth_key }}
+    --hostname={{ tailscale_hostname }}
+    {% if tailscale_advertise_routes | length > 0 %}
+    --advertise-routes={{ tailscale_advertise_routes | join(',') }}
+    {% endif %}
+    {% if tailscale_advertise_exit_node %}
+    --advertise-exit-node
+    {% endif %}
+    {% if not tailscale_accept_routes %}
+    --accept-routes=false
+    {% endif %}
+    {% if not tailscale_accept_dns %}
+    --accept-dns=false
+    {% endif %}
+    {% if tailscale_shields_up %}
+    --shields-up
+    {% endif %}
+    {% if tailscale_ssh %}
+    --ssh
+    {% endif %}
+    {% if tailscale_tags | length > 0 %}
+    --advertise-tags={{ tailscale_tags | join(',') }}
+    {% endif %}
+    {% if tailscale_force_reauth %}
+    --force-reauth
+    {% endif %}
+  when: not tailscale_authenticated or tailscale_force_reauth
+  become: yes
+  register: tailscale_auth_result
+
+- name: Wait for Tailscale to be ready
+  command: tailscale status
+  register: tailscale_status
+  until: tailscale_status.rc == 0
+  retries: "{{ tailscale_timeout // 10 }}"
+  delay: 10
+  when: tailscale_auth_result is changed
+
+- name: Display authentication result
+  debug:
+    msg: "{{ 'Tailscale authenticated successfully' if tailscale_auth_result is changed else 'Tailscale already authenticated' }}"

@@ -1,0 +1,53 @@
+---
+# GitLab Stack Role Defaults
+
+# GitLab Configuration
+gitlab_external_url: "https://gitlab.doofus.co"
+gitlab_ssh_port: 2222
+gitlab_initial_root_password: "{{ vault_gitlab_root_password | default(lookup('password', '/dev/null length=20 chars=ascii_letters,digits,punctuation')) }}"
+
+# Container Configuration
+gitlab_compose_dir: /opt/gitlab-stack
+gitlab_data_dir: /opt/gitlab-stack/data
+gitlab_config_dir: /opt/gitlab-stack/config
+gitlab_logs_dir: /opt/gitlab-stack/logs
+
+# Network Configuration
+gitlab_container_ip: 10.203.3.47
+gitlab_internal_port: 80
+gitlab_external_port: 80
+gitlab_ssh_external_port: 2222
+
+# Caddy Configuration
+caddy_config_dir: "{{ gitlab_compose_dir }}/caddy"
+enable_tailscale_domains: true
+tailscale_hostname: rawls
+
+# Phase Control (for future expansion)
+enable_semaphore: false
+enable_kestra: false
+
+# Semaphore Configuration (Phase 2)
+semaphore_admin_password: "{{ vault_semaphore_admin_password | default(lookup('password', '/dev/null length=20 chars=ascii_letters,digits,punctuation')) }}"
+semaphore_admin_email: "admin@doofus.co"
+
+# Kestra Configuration (Phase 3)
+kestra_db_password: "{{ vault_kestra_db_password | default(lookup('password', '/dev/null length=20 chars=ascii_letters,digits,punctuation')) }}"
+
+# Tailscale Configuration
+tailscale_auth_key: "{{ vault_tailscale_auth_key | default('') }}"
+tailscale_hostname_override: "{{ tailscale_hostname }}"
+
+# Security
+enable_fail2ban: true
+enable_ufw: true
+ufw_allowed_ports:
+  - "22"    # SSH
+  - "80"    # HTTP
+  - "443"   # HTTPS  
+  - "2222"  # GitLab SSH
+
+# Backup Configuration
+enable_gitlab_backups: true
+gitlab_backup_schedule: "0 2 * * *"  # 2 AM daily
+gitlab_backup_keep_time: 604800  # 7 days

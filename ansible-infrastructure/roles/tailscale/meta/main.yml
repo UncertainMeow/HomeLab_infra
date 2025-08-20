@@ -1,0 +1,25 @@
+---
+galaxy_info:
+  author: "HomeLab Infrastructure"
+  description: "Tailscale VPN client installation and configuration"
+  company: "doofus.co"
+  license: "MIT"
+  min_ansible_version: "2.9"
+  
+  platforms:
+    - name: Ubuntu
+      versions:
+        - focal
+        - jammy
+    - name: Debian
+      versions:
+        - bullseye
+        - bookworm
+  
+  galaxy_tags:
+    - tailscale
+    - vpn
+    - networking
+    - security
+
+dependencies: []

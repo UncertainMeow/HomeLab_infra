@@ -15,10 +15,21 @@ This is an Ansible-based infrastructure automation project for managing a Proxmo
   - `roles/`: Custom roles (common, ssh_hardening, user_management, proxmox)
   - `inventory/`: Host and group configurations
   - `collections/`: Custom Ansible collection at `kellen.infrastructure`
+  - `scripts/`: Utility scripts including `quick-setup.sh`
+  - `tests/`: Validation and testing playbooks
+  - `site.yml`: Master playbook orchestrating setup → maintenance → hardware assessment
 
 ### Key Configuration Files
-- **ansible-infrastructure/ansible.cfg**: Single centralized configuration with collection support
-- **ansible-infrastructure/inventory/hosts.yml**: Comprehensive inventory with groups (proxmox, ai_workers, monitoring)
+- **ansible-infrastructure/inventory/hosts.yml**: Comprehensive inventory with groups (proxmox, ai_workers, dns_servers, monitoring)
+- **ansible-infrastructure/site.yml**: Master orchestration playbook
+- **ansible-infrastructure/scripts/quick-setup.sh**: Environment validation script
+
+### Infrastructure Groups
+- **proxmox**: Virtualization hosts (socrates, rseau) 
+- **ai_workers**: AI/ML workload hosts (socrates with GPU support)
+- **dns_servers**: DNS infrastructure (rseau running Technitium DNS)
+- **kubernetes**: Future expansion for container orchestration
+- **monitoring**: Prometheus/Grafana monitoring stack
 
 ## Essential Commands
 
@@ -32,6 +43,9 @@ ssh-add -l
 
 # Test SSH connectivity manually
 ssh -F ~/.ssh/config-proxmox ansible@socrates
+
+# Verify Ansible configuration
+ansible-config dump | grep -E '(remote_user|ssh_args|collections_path)'
 ```
 
 ### Testing and Validation
@@ -54,24 +68,33 @@ ansible-config dump
 # All operations from ansible-infrastructure/ directory
 cd ansible-infrastructure
 
-# Full infrastructure deployment
+# Full infrastructure deployment (orchestrated setup)
 ansible-playbook site.yml
 
 # Initial server setup (for new hosts, run as root initially)
 ansible-playbook playbooks/setup/initial-setup.yml -u root --ask-pass
 
 # System maintenance
-ansible-playbook playbooks/maintenance/proxmox-maintenance.yml
 ansible-playbook playbooks/maintenance/system-update.yml
-ansible-playbook playbooks/maintenance/gather-facts.yml
-ansible-playbook playbooks/maintenance/update-packages.yml
-
-# Hardware assessment for AI workloads
 ansible-playbook playbooks/maintenance/hardware-assessment.yml
+
+# Legacy maintenance commands (root level)
+ansible-playbook proxmox-maintenance.yml
+ansible-playbook gather-facts.yml
+ansible-playbook update-packages.yml
+
+# DNS infrastructure deployment
+ansible-playbook playbooks/deployment/dns-lxc.yml
+ansible-playbook playbooks/deployment/technitium-dns.yml
+ansible-playbook playbooks/deployment/validate-dns.yml
 
 # AI/ML deployment pipeline
 ansible-playbook playbooks/deployment/docker-setup.yml
 ansible-playbook playbooks/deployment/ollama-setup.yml
+
+# Hardware-specific deployments
+ansible-playbook playbooks/deployment/dell-fan-controller.yml
+ansible-playbook playbooks/deployment/tailscale.yml
 ```
 
 ### User Management
@@ -79,8 +102,12 @@ ansible-playbook playbooks/deployment/ollama-setup.yml
 # Set up automation users with SSH keys (run as root initially)
 ansible-playbook playbooks/setup/setup-ansible-user.yml -u root
 
-# User management from collection
-ansible-playbook playbooks/setup/user-management.yml
+# User management (creates ansible and kellen users)
+ansible-playbook playbooks/setup/initial-setup.yml
+
+# Post-install system configuration
+ansible-playbook playbooks/setup/proxmox-post-install.yml
+ansible-playbook playbooks/setup/fix-proxmox-repos.yml
 ```
 
 ### Debugging and Troubleshooting
@@ -137,9 +164,10 @@ ansible-galaxy init roles/role-name
 
 ### Collection Structure
 - Custom collection: `collections/ansible_collections/kellen/infrastructure/`
-- Roles path includes both local roles and collection roles: `roles:collections/ansible_collections/kellen/infrastructure/roles`
-- Collection path configured: `collections_path = collections` in ansible.cfg
-- Master playbook: `site.yml` imports setup → maintenance → hardware assessment
+- Local roles in `ansible-infrastructure/roles/` (common, user_management, ssh_hardening, etc.)
+- Specialized roles: dell_idrac_fan_controller, proxmox_lxc, technitium_dns, tailscale
+- Master playbook: `site.yml` orchestrates initial-setup → system-update → hardware-assessment
+- Testing framework in `tests/validate-setup.yml`
 
 ### Migration Patterns
 - Use `migrate-to-new-structure.sh` for transitioning legacy configurations

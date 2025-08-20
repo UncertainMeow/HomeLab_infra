@@ -1,0 +1,57 @@
+---
+# DNS Server Configuration
+dns_server_config:
+  domain: "doofus.co"
+  network: "10.203.0.0/16"
+  
+# Technitium DNS Server Settings
+technitium:
+  image: "technitium/dns-server:latest"
+  web_port: 5380
+  dns_port: 53
+  data_path: "/opt/technitium"
+  
+  # Web console admin credentials
+  admin_user: "admin"
+  # admin_password will be generated/set during deployment
+  
+  # DNS zones to configure
+  zones:
+    - name: "doofus.co"
+      type: "primary"
+      records:
+        - name: "@"
+          type: "A"
+          value: "10.203.1.3"
+        - name: "rseau"
+          type: "A" 
+          value: "10.203.1.2"
+        - name: "rseau-dns"
+          type: "A"
+          value: "10.203.1.3"
+        - name: "socrates"
+          type: "A"
+          value: "10.203.3.42"
+        - name: "ns1"
+          type: "A"
+          value: "10.203.1.3"
+        - name: "@"
+          type: "NS"
+          value: "ns1.doofus.co."
+          
+  # DNS settings
+  settings:
+    recursion: true
+    cache_prefetch_trigger: 2
+    cache_prefetch_sample_interval_seconds: 7
+    cache_prefetch_sample_eligibility_hits_per_hour: 30
+    
+# Docker configuration
+docker:
+  restart_policy: "unless-stopped"
+  network_mode: "host"  # Required for DNS on port 53
+  
+# System settings
+system:
+  disable_systemd_resolved: true
+  backup_original_resolv_conf: true

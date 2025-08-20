@@ -1,0 +1,72 @@
+---
+# System preparation for Technitium DNS Server
+
+- name: Check if systemd-resolved is running
+  systemd:
+    name: systemd-resolved
+  register: systemd_resolved_status
+  failed_when: false
+
+- name: Backup original resolv.conf
+  copy:
+    src: /etc/resolv.conf
+    dest: /etc/resolv.conf.backup
+    backup: yes
+    remote_src: yes
+  when: 
+    - technitium_backup_resolv_conf
+    - systemd_resolved_status.status.ActiveState == "active"
+  notify: "restore resolv conf on failure"
+
+- name: Stop and disable systemd-resolved
+  systemd:
+    name: systemd-resolved
+    state: stopped
+    enabled: no
+  when: 
+    - technitium_disable_systemd_resolved
+    - systemd_resolved_status.status.ActiveState == "active"
+  notify: "restart systemd resolved on failure"
+
+- name: Create manual resolv.conf
+  template:
+    src: resolv.conf.j2
+    dest: /etc/resolv.conf
+    backup: yes
+  when: technitium_disable_systemd_resolved
+  notify: "restore resolv conf on failure"
+
+- name: Create Technitium data directory
+  file:
+    path: "{{ technitium_data_path }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Check if port 53 is available
+  wait_for:
+    port: 53
+    host: "{{ ansible_default_ipv4.address }}"
+    timeout: 1
+  register: port_check
+  failed_when: false
+
+- name: Fail if port 53 is occupied
+  fail:
+    msg: "Port 53 is already in use. Please stop any DNS services first."
+  when: port_check.elapsed < 1
+
+- name: Generate admin password if needed
+  set_fact:
+    technitium_admin_password: "{{ lookup('password', '/dev/null length=' + technitium_admin_password_length|string + ' chars=ascii_letters,digits') }}"
+  when: 
+    - technitium_generate_admin_password
+    - technitium_admin_password is not defined
+
+- name: Save admin password to file
+  copy:
+    content: "{{ technitium_admin_password }}"
+    dest: "{{ technitium_data_path }}/admin_password.txt"
+    mode: '0600'
+  when: technitium_admin_password is defined

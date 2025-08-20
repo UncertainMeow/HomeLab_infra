@@ -1,0 +1,76 @@
+---
+# Deploy Tailscale VPN client across homelab infrastructure
+# This playbook installs and configures Tailscale for secure remote access
+
+- name: Install Tailscale on Proxmox hosts
+  hosts: proxmox
+  become: yes
+  gather_facts: yes
+  
+  vars:
+    deployment_name: "Tailscale VPN Client"
+    
+  pre_tasks:
+    - name: Verify target hosts
+      debug:
+        msg: 
+          - "Installing {{ deployment_name }} on: {{ inventory_hostname }}"
+          - "Target IP: {{ ansible_host }}"
+          - "Role: {{ proxmox_node_role }}"
+    
+    - name: Check internet connectivity
+      uri:
+        url: "https://pkgs.tailscale.com"
+        method: HEAD
+        timeout: 10
+      register: connectivity_check
+      
+    - name: Ensure connectivity to Tailscale
+      fail:
+        msg: "Cannot reach Tailscale package repository"
+      when: connectivity_check.status != 200
+
+  roles:
+    - role: ../../roles/tailscale
+      vars:
+        tailscale_auth_key: "{{ lookup('env', 'TAILSCALE_AUTH_KEY') | default(lookup('pipe', 'op read \"op://Private/Tailscale Auth Key/credential\"')) }}"
+        tailscale_hostname: "{{ inventory_hostname }}-{{ hardware_profile | replace('_', '-') }}"
+        tailscale_ssh: true
+        tailscale_accept_routes: true
+        tailscale_accept_dns: false  # Keep local DNS resolution
+        tailscale_advertise_routes: ["10.203.0.0/16"]
+        tailscale_tags: []  # Add tags after configuring ACLs in Tailscale admin
+      tags: [tailscale]
+
+  post_tasks:
+    - name: Create Tailscale deployment record
+      copy:
+        content: |
+          Deployment: {{ deployment_name }}
+          Timestamp: {{ ansible_date_time.iso8601 }}
+          Host: {{ inventory_hostname }} ({{ ansible_host }})
+          Hostname: {{ inventory_hostname }}-{{ hardware_profile }}
+          SSH Access: Enabled via Tailscale
+          Routes Advertised: {{ ansible_default_ipv4.network }}/{{ ansible_default_ipv4.netmask }}
+          Tags: tag:homelab, tag:proxmox
+        dest: "/opt/tailscale_deployment.txt"
+        mode: '0644'
+      tags: [info]
+    
+    - name: Display deployment summary
+      debug:
+        msg:
+          - "🔐 {{ deployment_name }} installation completed!"
+          - ""
+          - "📊 Configuration:"
+          - "   Hostname: {{ inventory_hostname }}-{{ hardware_profile }}"
+          - "   SSH: Enabled via Tailscale"
+          - "   Routes: Local subnet advertised"
+          - "   DNS: Using local resolvers"
+          - ""
+          - "🔑 Next Steps:"
+          - "   1. Check status with: tailscale status"
+          - "   2. Access via Tailscale SSH from anywhere"
+          - "   3. Configure ACLs in Tailscale admin console"
+          - "   4. Set up subnet routing if needed"
+      tags: [info]

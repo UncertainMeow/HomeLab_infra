@@ -1,0 +1,38 @@
+---
+# ANSIBLE VAULT TEMPLATE
+# Copy this file to vault.yml and encrypt with: ansible-vault encrypt vault.yml
+# WARNING: This template contains EXAMPLE values - replace with actual secrets
+
+# GitLab Secrets
+vault_gitlab_root_password: "REPLACE_WITH_SECURE_PASSWORD"
+
+# DNS Server Secrets
+vault_dns_admin_password: "REPLACE_WITH_SECURE_PASSWORD"
+
+# Tailscale Integration
+vault_tailscale_auth_key: "tskey-auth-REPLACE_WITH_YOUR_TAILSCALE_AUTH_KEY"
+
+# Proxmox API Access
+vault_proxmox_password: "REPLACE_WITH_PROXMOX_ROOT_PASSWORD"
+
+# Phase 2: Semaphore Secrets (uncomment when needed)
+# vault_semaphore_admin_password: "REPLACE_WITH_SECURE_PASSWORD"
+
+# Phase 3: Kestra Secrets (uncomment when needed)
+# vault_kestra_db_password: "REPLACE_WITH_SECURE_PASSWORD"
+
+# LXC Container Secrets
+vault_lxc_root_password: "REPLACE_WITH_SECURE_PASSWORD"
+
+# Dell iDRAC Management (if using Dell servers)
+# vault_dell_idrac_password: "REPLACE_WITH_IDRAC_PASSWORD"
+
+# Cloudflare DNS Management (for external access)
+# vault_cloudflare_api_token: "REPLACE_WITH_CLOUDFLARE_API_TOKEN"
+# vault_cloudflare_zone_id: "REPLACE_WITH_CLOUDFLARE_ZONE_ID"
+
+# SECURITY NOTES:
+# 1. Never commit actual secrets to git
+# 2. Use strong, unique passwords for each service
+# 3. Rotate secrets regularly
+# 4. Keep vault password in secure location (1Password recommended)

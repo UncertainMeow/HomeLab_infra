@@ -1,0 +1,21 @@
+---
+galaxy_info:
+  author: "HomeLab Infrastructure"
+  description: "Proxmox LXC container provisioning and management"
+  company: "doofus.co"
+  license: "MIT"
+  min_ansible_version: "2.9"
+  
+  platforms:
+    - name: Debian
+      versions:
+        - bullseye
+        - bookworm
+  
+  galaxy_tags:
+    - proxmox
+    - lxc
+    - containers
+    - virtualization
+
+dependencies: []

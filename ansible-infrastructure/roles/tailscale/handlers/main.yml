@@ -1,0 +1,8 @@
+---
+# Tailscale handlers
+
+- name: restart tailscale
+  systemd:
+    name: tailscaled
+    state: restarted
+  become: yes

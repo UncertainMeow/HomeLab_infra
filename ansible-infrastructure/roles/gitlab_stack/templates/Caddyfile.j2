@@ -1,0 +1,67 @@
+# Caddyfile for GitLab stack with Tailscale magic domains
+# Phase 1: GitLab only
+
+# GitLab external access via doofus.co
+{{ gitlab_external_url.split("://")[1] }} {
+    reverse_proxy gitlab:{{ gitlab_internal_port }}
+    
+    # Enable request logging
+    log {
+        output file /data/logs/gitlab.log {
+            roll_size 10MB
+            roll_keep 5
+        }
+    }
+}
+
+{% if enable_tailscale_domains and tailscale_hostname is defined %}
+# GitLab Tailscale magic domain access
+gitlab.{{ tailscale_hostname }}.ts.net {
+    reverse_proxy gitlab:{{ gitlab_internal_port }}
+}
+{% endif %}
+
+{% if enable_semaphore %}
+# Phase 2: Semaphore UI
+semaphore.doofus.co {
+    reverse_proxy semaphore:3000
+    
+    log {
+        output file /data/logs/semaphore.log {
+            roll_size 10MB
+            roll_keep 5  
+        }
+    }
+}
+
+{% if enable_tailscale_domains and tailscale_hostname is defined %}
+semaphore.{{ tailscale_hostname }}.ts.net {
+    reverse_proxy semaphore:3000
+}
+{% endif %}
+{% endif %}
+
+{% if enable_kestra %}
+# Phase 3: Kestra workflow orchestration
+kestra.doofus.co {
+    reverse_proxy kestra:8080
+    
+    log {
+        output file /data/logs/kestra.log {
+            roll_size 10MB
+            roll_keep 5
+        }
+    }
+}
+
+{% if enable_tailscale_domains and tailscale_hostname is defined %}
+kestra.{{ tailscale_hostname }}.ts.net {
+    reverse_proxy kestra:8080
+}
+{% endif %}
+{% endif %}
+
+# Default response for unmatched domains
+:80 {
+    respond "HomeLab Services - Access via proper domain" 404
+}

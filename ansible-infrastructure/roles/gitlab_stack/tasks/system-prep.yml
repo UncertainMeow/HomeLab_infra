@@ -1,0 +1,68 @@
+---
+# System preparation for GitLab stack
+
+- name: Update package cache
+  apt:
+    update_cache: yes
+    cache_valid_time: 3600
+
+- name: Install required packages
+  package:
+    name:
+      - docker.io
+      - docker-compose
+      - curl
+      - git
+      - htop
+      - vim
+      - ufw
+      - fail2ban
+    state: present
+
+- name: Ensure Docker service is running
+  systemd:
+    name: docker
+    state: started
+    enabled: yes
+
+- name: Add ansible user to docker group
+  user:
+    name: "{{ ansible_user }}"
+    groups: docker
+    append: yes
+
+- name: Create GitLab stack directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0755'
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+  loop:
+    - "{{ gitlab_compose_dir }}"
+    - "{{ gitlab_data_dir }}"
+    - "{{ gitlab_config_dir }}"
+    - "{{ gitlab_logs_dir }}"
+    - "{{ caddy_config_dir }}"
+
+- name: Set up log rotation for Docker
+  copy:
+    dest: /etc/docker/daemon.json
+    content: |
+      {
+        "log-driver": "json-file",
+        "log-opts": {
+          "max-size": "10m",
+          "max-file": "3"
+        }
+      }
+    mode: '0644'
+  notify: restart docker
+
+- name: Ensure proper file permissions
+  file:
+    path: "{{ gitlab_compose_dir }}"
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: '0755'
+    recurse: yes

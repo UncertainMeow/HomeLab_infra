@@ -1,0 +1,67 @@
+---
+# Backup configuration for GitLab
+
+- name: Create backup scripts directory
+  file:
+    path: /opt/backup-scripts
+    state: directory
+    mode: '0755'
+    
+- name: Create GitLab backup script
+  template:
+    src: gitlab-backup.sh.j2
+    dest: /opt/backup-scripts/gitlab-backup.sh
+    mode: '0755'
+    owner: root
+    group: root
+
+- name: Set up GitLab backup cron job
+  cron:
+    name: "GitLab automated backup"
+    cron_file: gitlab-backup
+    minute: "0"
+    hour: "2"
+    job: "/opt/backup-scripts/gitlab-backup.sh >> /var/log/gitlab-backup.log 2>&1"
+    user: root
+  when: gitlab_backup_schedule is defined
+
+- name: Create backup cleanup script
+  template:
+    src: gitlab-cleanup.sh.j2
+    dest: /opt/backup-scripts/gitlab-cleanup.sh
+    mode: '0755'
+    owner: root
+    group: root
+
+- name: Set up backup cleanup cron job (weekly)
+  cron:
+    name: "GitLab backup cleanup"
+    cron_file: gitlab-backup-cleanup
+    minute: "0"
+    hour: "3"
+    weekday: "0"
+    job: "/opt/backup-scripts/gitlab-cleanup.sh >> /var/log/gitlab-backup-cleanup.log 2>&1"
+    user: root
+
+- name: Create backup log rotation
+  copy:
+    dest: /etc/logrotate.d/gitlab-backup
+    content: |
+      /var/log/gitlab-backup.log {
+          weekly
+          rotate 4
+          compress
+          delaycompress
+          missingok
+          notifempty
+      }
+      
+      /var/log/gitlab-backup-cleanup.log {
+          weekly
+          rotate 4
+          compress
+          delaycompress
+          missingok
+          notifempty
+      }
+    mode: '0644'

@@ -1,0 +1,159 @@
+#!/usr/bin/env python3
+"""
+Technitium DNS Zone Configuration Script
+Configures zones and records via REST API
+"""
+
+import requests
+import json
+import os
+import sys
+import time
+
+# Configuration from environment
+TECHNITIUM_URL = os.environ.get('TECHNITIUM_URL', 'http://localhost:5380')
+TECHNITIUM_USER = os.environ.get('TECHNITIUM_USER', 'admin')
+TECHNITIUM_PASSWORD = os.environ.get('TECHNITIUM_PASSWORD')
+
+# Zone configuration from Ansible template
+ZONES_CONFIG = {{ technitium_zones | to_nice_json }}
+
+class TechnitiumAPI:
+    def __init__(self, base_url, username, password):
+        self.base_url = base_url.rstrip('/')
+        self.username = username
+        self.password = password
+        self.token = None
+        
+    def login(self):
+        """Authenticate and get access token"""
+        login_url = f"{self.base_url}/api/user/login"
+        data = {
+            'user': self.username,
+            'pass': self.password
+        }
+        
+        try:
+            response = requests.post(login_url, data=data, timeout=10)
+            response.raise_for_status()
+            result = response.json()
+            
+            if result.get('status') == 'ok':
+                self.token = result.get('token')
+                print(f"✓ Successfully authenticated as {self.username}")
+                return True
+            else:
+                print(f"✗ Authentication failed: {result.get('errorMessage', 'Unknown error')}")
+                return False
+                
+        except requests.exceptions.RequestException as e:
+            print(f"✗ Connection error during login: {e}")
+            return False
+    
+    def create_zone(self, zone_name, zone_type='Primary'):
+        """Create a DNS zone"""
+        url = f"{self.base_url}/api/zones/create"
+        data = {
+            'token': self.token,
+            'zone': zone_name,
+            'type': zone_type
+        }
+        
+        try:
+            response = requests.post(url, data=data, timeout=10)
+            response.raise_for_status()
+            result = response.json()
+            
+            if result.get('status') == 'ok':
+                print(f"✓ Created zone: {zone_name}")
+                return True
+            else:
+                error_msg = result.get('errorMessage', 'Unknown error')
+                if 'already exists' in error_msg.lower():
+                    print(f"ℹ Zone already exists: {zone_name}")
+                    return True
+                else:
+                    print(f"✗ Failed to create zone {zone_name}: {error_msg}")
+                    return False
+                    
+        except requests.exceptions.RequestException as e:
+            print(f"✗ Error creating zone {zone_name}: {e}")
+            return False
+    
+    def add_record(self, zone_name, record_name, record_type, record_value, ttl=3600):
+        """Add a DNS record to a zone"""
+        url = f"{self.base_url}/api/zones/records/add"
+        data = {
+            'token': self.token,
+            'zone': zone_name,
+            'name': record_name,
+            'type': record_type,
+            'rdata': record_value,
+            'ttl': ttl
+        }
+        
+        try:
+            response = requests.post(url, data=data, timeout=10)
+            response.raise_for_status()
+            result = response.json()
+            
+            if result.get('status') == 'ok':
+                print(f"✓ Added {record_type} record: {record_name} -> {record_value}")
+                return True
+            else:
+                error_msg = result.get('errorMessage', 'Unknown error')
+                print(f"✗ Failed to add record {record_name}: {error_msg}")
+                return False
+                
+        except requests.exceptions.RequestException as e:
+            print(f"✗ Error adding record {record_name}: {e}")
+            return False
+
+def main():
+    if not TECHNITIUM_PASSWORD:
+        print("✗ TECHNITIUM_PASSWORD environment variable not set")
+        sys.exit(1)
+    
+    print(f"Configuring Technitium DNS zones at {TECHNITIUM_URL}")
+    
+    # Initialize API client
+    api = TechnitiumAPI(TECHNITIUM_URL, TECHNITIUM_USER, TECHNITIUM_PASSWORD)
+    
+    # Authenticate
+    if not api.login():
+        sys.exit(1)
+    
+    # Wait a moment for the server to be ready
+    time.sleep(2)
+    
+    # Process each zone
+    for zone_config in ZONES_CONFIG:
+        zone_name = zone_config['name']
+        zone_type = zone_config.get('type', 'Primary').title()
+        
+        print(f"\nProcessing zone: {zone_name}")
+        
+        # Create the zone
+        if not api.create_zone(zone_name, zone_type):
+            continue
+        
+        # Add records to the zone
+        records = zone_config.get('records', [])
+        for record in records:
+            record_name = record['name']
+            record_type = record['type']
+            record_value = record['value']
+            
+            # Handle @ symbol for zone apex
+            if record_name == '@':
+                record_name = zone_name
+            elif not record_name.endswith('.') and record_name != zone_name:
+                # Qualify relative names
+                record_name = f"{record_name}.{zone_name}"
+            
+            api.add_record(zone_name, record_name, record_type, record_value)
+    
+    print(f"\n✓ Zone configuration completed!")
+
+if __name__ == '__main__':
+    main()

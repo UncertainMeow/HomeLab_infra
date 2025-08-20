@@ -1,0 +1,24 @@
+---
+# Tailscale installation and configuration
+
+- name: Include installation tasks
+  include_tasks: install.yml
+  tags: [tailscale, install]
+
+- name: Include authentication tasks
+  include_tasks: authenticate.yml
+  tags: [tailscale, auth]
+  when: tailscale_auth_key != ""
+
+- name: Include configuration tasks
+  include_tasks: configure.yml
+  tags: [tailscale, configure]
+
+- name: Display Tailscale status
+  debug:
+    msg:
+      - "Tailscale installed and configured on {{ inventory_hostname }}"
+      - "Status: {{ tailscale_status.stdout if tailscale_status is defined else 'Check manually with: tailscale status' }}"
+      - "Hostname: {{ tailscale_hostname }}"
+      - "SSH enabled: {{ tailscale_ssh }}"
+  tags: [tailscale, info]

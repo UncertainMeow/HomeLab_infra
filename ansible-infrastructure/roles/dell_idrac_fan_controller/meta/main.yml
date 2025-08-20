@@ -1,0 +1,26 @@
+---
+galaxy_info:
+  author: "HomeLab Infrastructure"
+  description: "Dell iDRAC fan controller for quieter operation"
+  company: "doofus.co"
+  license: "MIT"
+  min_ansible_version: "2.9"
+  
+  platforms:
+    - name: Debian
+      versions:
+        - bullseye
+        - bookworm
+    - name: Ubuntu
+      versions:
+        - focal
+        - jammy
+  
+  galaxy_tags:
+    - dell
+    - idrac
+    - fan
+    - docker
+    - hardware
+
+dependencies: []

@@ -1,0 +1,37 @@
+---
+# GitLab Stack Role Metadata
+
+galaxy_info:
+  author: Claude Code
+  description: Comprehensive GitLab CE stack with Caddy reverse proxy, Tailscale integration, and phased deployment support
+  company: HomeLab Infrastructure
+  license: MIT
+  min_ansible_version: 2.14
+  
+  platforms:
+    - name: Ubuntu
+      versions:
+        - focal
+        - jammy
+    - name: Debian
+      versions:
+        - bullseye
+        - bookworm
+        
+  galaxy_tags:
+    - gitlab
+    - docker
+    - caddy
+    - tailscale
+    - homelab
+    - ci-cd
+    - reverse-proxy
+    - infrastructure
+
+dependencies:
+  - role: common
+    when: enable_common_setup | default(true)
+
+collections:
+  - community.docker
+  - community.general

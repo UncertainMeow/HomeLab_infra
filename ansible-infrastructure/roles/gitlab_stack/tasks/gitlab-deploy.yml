@@ -1,0 +1,66 @@
+---
+# GitLab stack deployment with Docker Compose
+
+- name: Generate environment file for secrets
+  template:
+    src: gitlab.env.j2
+    dest: "{{ gitlab_compose_dir }}/.env"
+    mode: '0600'
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+
+- name: Generate Docker Compose configuration
+  template:
+    src: docker-compose.yml.j2
+    dest: "{{ gitlab_compose_dir }}/docker-compose.yml"
+    mode: '0644'
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+
+- name: Generate Caddyfile
+  template:
+    src: Caddyfile.j2
+    dest: "{{ caddy_config_dir }}/Caddyfile"
+    mode: '0644'
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+
+- name: Stop existing GitLab stack if running
+  command: "{{ docker_compose_cmd }} down"
+  args:
+    chdir: "{{ gitlab_compose_dir }}"
+  become_user: "{{ ansible_user }}"
+  ignore_errors: yes
+
+- name: Start GitLab stack
+  command: "{{ docker_compose_cmd }} up -d"
+  args:
+    chdir: "{{ gitlab_compose_dir }}"
+  become_user: "{{ ansible_user }}"
+
+- name: Wait for GitLab to be ready
+  wait_for:
+    host: localhost
+    port: "{{ gitlab_external_port }}"
+    timeout: 300
+
+- name: Wait for GitLab initialization (this takes a while)
+  uri:
+    url: "http://localhost:{{ gitlab_external_port }}/"
+    method: GET
+    status_code: 200
+  register: gitlab_health_check
+  until: gitlab_health_check.status == 200
+  retries: 20
+  delay: 30
+
+- name: Get GitLab container status
+  command: "{{ docker_compose_cmd }} ps"
+  args:
+    chdir: "{{ gitlab_compose_dir }}"
+  become_user: "{{ ansible_user }}"
+  register: compose_status
+
+- name: Display container status
+  debug:
+    var: compose_status.stdout_lines

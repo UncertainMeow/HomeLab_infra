@@ -1,0 +1,42 @@
+---
+# Install Tailscale
+
+- name: Create keyrings directory
+  file:
+    path: /usr/share/keyrings
+    state: directory
+    mode: '0755'
+  become: yes
+
+- name: Download Tailscale GPG key
+  get_url:
+    url: https://pkgs.tailscale.com/stable/{{ ansible_distribution | lower }}/{{ ansible_distribution_release }}.noarmor.gpg
+    dest: /usr/share/keyrings/tailscale-archive-keyring.gpg
+    mode: '0644'
+  become: yes
+
+- name: Add Tailscale repository
+  apt_repository:
+    repo: "deb [signed-by=/usr/share/keyrings/tailscale-archive-keyring.gpg] https://pkgs.tailscale.com/stable/{{ ansible_distribution | lower }} {{ ansible_distribution_release }} main"
+    state: present
+    filename: tailscale
+  become: yes
+
+- name: Update apt cache
+  apt:
+    update_cache: yes
+  become: yes
+
+- name: Install Tailscale
+  apt:
+    name: tailscale
+    state: "{{ tailscale_package_state }}"
+  become: yes
+  notify: restart tailscale
+
+- name: Enable Tailscale service
+  systemd:
+    name: tailscaled
+    enabled: "{{ tailscale_service_enabled }}"
+    state: "{{ tailscale_service_state }}"
+  become: yes

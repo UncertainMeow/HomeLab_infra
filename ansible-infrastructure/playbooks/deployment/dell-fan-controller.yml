@@ -1,0 +1,102 @@
+---
+# Deploy Dell iDRAC Fan Controller for quieter server operation
+# This manages Dell server fan speeds via iDRAC for home lab use
+
+- name: Deploy Dell iDRAC Fan Controller
+  hosts: proxmox
+  become: yes
+  gather_facts: yes
+  
+  vars:
+    deployment_name: "Dell iDRAC Fan Controller"
+    
+  pre_tasks:
+    - name: Verify target hosts
+      debug:
+        msg: 
+          - "Deploying {{ deployment_name }} on: {{ inventory_hostname }}"
+          - "Target IP: {{ ansible_host }}"
+          - "Hardware: {{ hardware_profile }}"
+    
+    - name: Check if host has Dell hardware
+      shell: dmidecode -s system-manufacturer
+      register: hardware_check
+      changed_when: false
+      failed_when: false
+    
+    - name: Skip non-Dell hardware
+      meta: end_host
+      when: 
+        - hardware_check.rc == 0
+        - "'Dell' not in hardware_check.stdout"
+    
+    - name: Verify iDRAC configuration
+      assert:
+        that:
+          - dell_idrac_host is defined
+          - dell_idrac_password is defined
+          - dell_idrac_host != ""
+          - dell_idrac_password != ""
+        fail_msg: "iDRAC host and password must be configured in host_vars"
+        success_msg: "iDRAC configuration verified"
+
+  roles:
+    - role: ../../roles/dell_idrac_fan_controller
+      tags: [fan-controller, dell]
+
+  post_tasks:
+    - name: Create fan controller deployment record
+      copy:
+        content: |
+          Deployment: {{ deployment_name }}
+          Timestamp: {{ ansible_date_time.iso8601 }}
+          Host: {{ inventory_hostname }} ({{ ansible_host }})
+          Hardware: {{ hardware_check.stdout | default('Unknown') }}
+          
+          iDRAC Configuration:
+          - Host: {{ dell_idrac_host }}
+          - Username: {{ dell_idrac_username }}
+          - Fan Speed: {{ dell_idrac_fan_speed }}%
+          - Check Interval: {{ dell_fan_controller_check_interval }}s
+          - Temperature Threshold: {{ dell_fan_controller_local_temp_threshold }}°C
+          
+          Container Details:
+          - Name: {{ dell_fan_controller_container_name }}
+          - Image: {{ dell_fan_controller_image }}
+          - Network: {{ dell_fan_controller_network_mode }}
+          - Restart Policy: {{ dell_fan_controller_restart_policy }}
+          
+          Monitoring:
+          - Script: /usr/local/bin/monitor-fan-controller.sh
+          - Service: dell-fan-controller-monitor.service
+          - Logs: /var/log/dell-fan-controller-monitor.log
+        dest: "/opt/dell-fan-controller-deployment.txt"
+        mode: '0644'
+      tags: [info]
+    
+    - name: Display deployment summary
+      debug:
+        msg:
+          - "🌀 {{ deployment_name }} deployment completed!"
+          - ""
+          - "📊 Configuration:"
+          - "   Host: {{ inventory_hostname }} ({{ ansible_host }})"
+          - "   Hardware: {{ hardware_check.stdout | default('Unknown') }}"
+          - "   iDRAC: {{ dell_idrac_host }}"
+          - "   Fan Speed: {{ dell_idrac_fan_speed }}%"
+          - ""
+          - "🐳 Container Status:"
+          - "   Name: {{ dell_fan_controller_container_name }}"
+          - "   Image: {{ dell_fan_controller_image }}"
+          - "   Check: docker ps | grep {{ dell_fan_controller_container_name }}"
+          - ""
+          - "📊 Monitoring:"
+          - "   Logs: docker logs {{ dell_fan_controller_container_name }}"
+          - "   Monitor: /usr/local/bin/monitor-fan-controller.sh"
+          - "   Service: systemctl status dell-fan-controller-monitor"
+          - ""
+          - "⚠️ Notes:"
+          - "   - Monitor server temperatures after deployment"
+          - "   - Adjust fan speed if temperatures are too high"
+          - "   - Safety mode prevents overheating"
+      tags: [info]

@@ -1,0 +1,84 @@
+---
+# Deployment summary and final information
+
+- name: Get final container status
+  command: "{{ docker_compose_cmd }} ps"
+  args:
+    chdir: "{{ gitlab_compose_dir }}"
+  become_user: "{{ ansible_user }}"
+  register: final_container_status
+
+- name: Get GitLab version info
+  command: "{{ docker_compose_cmd }} exec -T gitlab gitlab-rake gitlab:env:info"
+  args:
+    chdir: "{{ gitlab_compose_dir }}"
+  become_user: "{{ ansible_user }}"
+  register: gitlab_version_info
+  ignore_errors: yes
+
+- name: Display comprehensive deployment summary
+  debug:
+    msg: |
+      
+      🎉 GitLab Stack Deployment Completed Successfully!
+      ============================================================
+      
+      📊 Container Status:
+      {{ final_container_status.stdout }}
+      
+      🌐 Access Points:
+      {% if gitlab_external_url is defined %}
+      - External: {{ gitlab_external_url }}
+      {% endif %}
+      {% if enable_tailscale_domains and tailscale_hostname is defined and tailscale_ip is defined %}
+      - Tailscale: https://gitlab.{{ tailscale_hostname }}.ts.net
+      - Tailscale IP: {{ tailscale_ip }}
+      {% endif %}
+      - Local: http://{{ ansible_host }}
+      - SSH Git: ssh://git@{{ ansible_host }}:{{ gitlab_ssh_external_port }}
+      
+      🔐 Credentials:
+      - Username: root
+      - Password: {{ gitlab_initial_root_password }}
+      
+      📁 Data Locations:
+      - Compose Directory: {{ gitlab_compose_dir }}
+      - GitLab Data: {{ gitlab_data_dir }}
+      - GitLab Config: {{ gitlab_config_dir }}
+      - GitLab Logs: {{ gitlab_logs_dir }}
+      
+      🛠️ Management Commands:
+      - View logs: cd {{ gitlab_compose_dir }} && {{ docker_compose_cmd }} logs -f
+      - Restart services: cd {{ gitlab_compose_dir }} && {{ docker_compose_cmd }} restart
+      - Update services: cd {{ gitlab_compose_dir }} && {{ docker_compose_cmd }} pull && {{ docker_compose_cmd }} up -d
+      
+      📈 Next Steps:
+      1. Access GitLab UI and complete setup
+      2. Create your first project
+      3. Set up CI/CD runners
+      4. Configure backup verification
+      {% if not enable_semaphore %}
+      5. Consider enabling Semaphore (Phase 2) for Ansible UI
+      {% endif %}
+      {% if not enable_kestra %}
+      6. Consider enabling Kestra (Phase 3) for workflow orchestration
+      {% endif %}
+      
+      🔧 Troubleshooting:
+      - Container status: {{ docker_compose_cmd }} ps
+      - GitLab logs: {{ docker_compose_cmd }} logs gitlab
+      - Caddy logs: {{ docker_compose_cmd }} logs caddy
+      - System logs: journalctl -u docker -f
+      
+      ⚠️  Important Notes:
+      - GitLab may take 5-10 minutes to fully initialize
+      - First login will prompt to change password
+      - SSH clone URLs use port {{ gitlab_ssh_external_port }}
+      {% if enable_gitlab_backups %}
+      - Automated backups configured for {{ gitlab_backup_schedule }}
+      {% endif %}
+      
+      🎯 Ready for MS-01 Migration:
+      - All data in Docker volumes for easy migration
+      - Configuration templates ready for k3s deployment
+      - Backup system in place for safe transitions

@@ -1,0 +1,106 @@
+---
+# Security configuration tasks
+
+- name: Configure UFW firewall
+  block:
+    - name: Set UFW default incoming policy to deny
+      ufw:
+        direction: incoming
+        policy: deny
+        
+    - name: Set UFW default outgoing policy to allow
+      ufw:
+        direction: outgoing
+        policy: allow
+        
+    - name: Allow SSH
+      ufw:
+        rule: allow
+        port: '22'
+        proto: tcp
+        
+    - name: Allow HTTP and HTTPS
+      ufw:
+        rule: allow
+        port: "{{ item }}"
+        proto: tcp
+      loop:
+        - '80'
+        - '443'
+        
+    - name: Allow GitLab SSH
+      ufw:
+        rule: allow
+        port: "{{ gitlab_ssh_external_port }}"
+        proto: tcp
+        
+    - name: Enable UFW
+      ufw:
+        state: enabled
+  when: enable_ufw
+
+- name: Configure fail2ban
+  block:
+    - name: Ensure fail2ban is installed and running
+      systemd:
+        name: fail2ban
+        state: started
+        enabled: yes
+        
+    - name: Create fail2ban jail for GitLab
+      copy:
+        dest: /etc/fail2ban/jail.d/gitlab.conf
+        content: |
+          [gitlab]
+          enabled = true
+          port = 80,443,{{ gitlab_ssh_external_port }}
+          filter = gitlab
+          logpath = {{ gitlab_logs_dir }}/gitlab-rails/production.log
+          maxretry = 5
+          findtime = 600
+          bantime = 3600
+        mode: '0644'
+      notify: restart fail2ban
+      
+    - name: Create fail2ban filter for GitLab
+      copy:
+        dest: /etc/fail2ban/filter.d/gitlab.conf
+        content: |
+          [Definition]
+          failregex = ^.*\"ip\":\"<HOST>\".*\"level\":\"ERROR\".*$
+          ignoreregex =
+        mode: '0644'
+      notify: restart fail2ban
+  when: enable_fail2ban
+
+- name: Set up Docker security
+  block:
+    - name: Configure Docker daemon security
+      copy:
+        dest: /etc/docker/daemon.json
+        content: |
+          {
+            "log-driver": "json-file",
+            "log-opts": {
+              "max-size": "10m",
+              "max-file": "3"
+            },
+            "userns-remap": "default",
+            "no-new-privileges": true
+          }
+        mode: '0644'
+      notify: restart docker
+      
+    - name: Create Docker security profile
+      copy:
+        dest: /etc/apparmor.d/docker-gitlab
+        content: |
+          #include <tunables/global>
+          
+          profile docker-gitlab flags=(attach_disconnected,mediate_deleted) {
+            #include <abstractions/base>
+            deny /proc/sys/kernel/core_pattern w,
+            deny /sys/kernel/security/ r,
+          }
+        mode: '0644'
+  ignore_errors: yes  # AppArmor might not be available

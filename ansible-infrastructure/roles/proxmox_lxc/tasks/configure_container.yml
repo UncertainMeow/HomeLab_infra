@@ -1,0 +1,66 @@
+---
+# Post-creation container configuration
+
+- name: Add container to in-memory inventory
+  add_host:
+    hostname: "{{ lxc_hostname }}"
+    ansible_host: "{{ lxc_net_ip.split('/')[0] }}"
+    ansible_user: root
+    ansible_password: "{{ lxc_password }}"
+    groups: lxc_containers
+  changed_when: false
+
+- name: Wait for container SSH to be ready
+  wait_for_connection:
+    timeout: 180
+  delegate_to: "{{ lxc_hostname }}"
+
+- name: Update container package cache
+  apt:
+    update_cache: yes
+  delegate_to: "{{ lxc_hostname }}"
+
+- name: Install essential packages in container
+  apt:
+    name:
+      - curl
+      - wget
+      - nano
+      - htop
+      - net-tools
+      - dnsutils
+      - ca-certificates
+      - gnupg
+      - lsb-release
+    state: present
+  delegate_to: "{{ lxc_hostname }}"
+
+- name: Create ansible user in container
+  user:
+    name: ansible
+    shell: /bin/bash
+    create_home: yes
+    groups: sudo
+    append: yes
+  delegate_to: "{{ lxc_hostname }}"
+
+- name: Set up SSH key for ansible user
+  authorized_key:
+    user: ansible
+    key: "{{ item }}"
+    state: present
+  loop: "{{ lxc_ssh_public_keys }}"
+  when: lxc_ssh_public_keys | length > 0
+  delegate_to: "{{ lxc_hostname }}"
+
+- name: Configure passwordless sudo for ansible user
+  copy:
+    content: "ansible ALL=(ALL) NOPASSWD:ALL"
+    dest: /etc/sudoers.d/ansible
+    mode: '0440'
+  delegate_to: "{{ lxc_hostname }}"
+
+- name: Set container timezone
+  timezone:
+    name: "{{ ansible_timezone | default('UTC') }}"
+  delegate_to: "{{ lxc_hostname }}"
