@@ -1,0 +1,39 @@
+---
+# Deploy OpenWebUI container and expose it via Tailscale Serve
+- name: Deploy OpenWebUI and expose via Tailscale
+  hosts: ai_workers
+  become: yes
+  vars:
+    openwebui_image: ghcr.io/open-webui/open-webui:latest
+    openwebui_host_port: 3000
+
+  roles:
+    - role: ../../roles/tailscale
+      vars:
+        tailscale_auth_key: "{{ lookup('env', 'TAILSCALE_AUTH_KEY') | default('') }}"
+        tailscale_hostname: "{{ inventory_hostname }}-openwebui"
+        tailscale_accept_dns: false
+
+  tasks:
+    - name: Deploy OpenWebUI container
+      docker_container:
+        name: openwebui
+        image: "{{ openwebui_image }}"
+        restart_policy: unless-stopped
+        published_ports:
+          - "{{ openwebui_host_port }}:8080"
+        volumes:
+          - /opt/openwebui:/app/backend/data
+
+    - name: Expose OpenWebUI via Tailscale Serve
+      command: "tailscale serve https 443 http://localhost:{{ openwebui_host_port }}"
+      register: tailscale_serve
+      changed_when: "'Serving' in tailscale_serve.stdout"
+
+    - name: Display OpenWebUI access information
+      debug:
+        msg:
+          - "OpenWebUI deployed on {{ inventory_hostname }}"
+          - "Local URL: http://{{ ansible_default_ipv4.address }}:{{ openwebui_host_port }}"
+          - "Tailscale URL: https://{{ inventory_hostname }}.{{ tailscale_dns_search_domains | first | default('') }}"
+

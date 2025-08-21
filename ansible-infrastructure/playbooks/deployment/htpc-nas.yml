@@ -1,0 +1,31 @@
+---
+# Deploy NAS services on the htpc host using Docker Compose
+- name: Deploy NAS stack on htpc
+  hosts: htpc
+  become: yes
+  vars:
+    nas_compose_dir: /opt/nas
+
+  tasks:
+    - name: Ensure NAS compose directory exists
+      file:
+        path: "{{ nas_compose_dir }}"
+        state: directory
+        mode: '0755'
+
+    - name: Deploy NAS docker-compose file
+      template:
+        src: templates/htpc-nas/docker-compose.yml.j2
+        dest: "{{ nas_compose_dir }}/docker-compose.yml"
+
+    - name: Launch NAS stack
+      community.docker.docker_compose:
+        project_src: "{{ nas_compose_dir }}"
+        state: present
+
+    - name: Display NAS deployment information
+      debug:
+        msg:
+          - "NAS stack deployed on {{ inventory_hostname }}"
+          - "Data directory: {{ nas_data_path | default('/srv/nas') }}"
+

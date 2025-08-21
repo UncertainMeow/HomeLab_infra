@@ -38,16 +38,27 @@
 - name: Set Tailscale preferences
   command: >
     tailscale set
-    {% if tailscale_shields_up %}
-    --shields-up
-    {% else %}
-    --shields-up=false
-    {% endif %}
-    {% if tailscale_ssh %}
-    --ssh
-    {% else %}
-    --ssh=false
-    {% endif %}
+      {% if tailscale_shields_up %}
+      --shields-up
+      {% else %}
+      --shields-up=false
+      {% endif %}
+      {% if tailscale_ssh %}
+      --ssh
+      {% else %}
+      --ssh=false
+      {% endif %}
+      {% if tailscale_accept_dns %}
+      --accept-dns=true
+      {% else %}
+      --accept-dns=false
+      {% endif %}
+      {% if tailscale_dns_servers | length > 0 %}
+      --dns={{ tailscale_dns_servers | join(',') }}
+      {% endif %}
+      {% if tailscale_dns_search_domains | length > 0 %}
+      --search-domains={{ tailscale_dns_search_domains | join(',') }}
+      {% endif %}
   when: current_tailscale_config.get('BackendState') == 'Running'
   become: yes
   register: tailscale_prefs_result

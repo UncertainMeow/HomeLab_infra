@@ -7,6 +7,7 @@ Manages DNS zones and records for HomeLab infrastructure
 import requests
 import json
 import sys
+import subprocess
 from typing import Dict, List, Optional
 
 class TechnitiumDNS:
@@ -114,6 +115,19 @@ class TechnitiumDNS:
         except Exception as e:
             print(f"Error adding record: {e}")
             return False
+
+    def add_tailscale_record(self, domain: str, name: str, ttl: int = 3600) -> bool:
+        """Register this host's Tailscale IP as an A record"""
+        try:
+            result = subprocess.run(["tailscale", "ip", "-4"], capture_output=True, text=True, check=True)
+            ip_addr = result.stdout.strip()
+            if not ip_addr:
+                print("Could not determine Tailscale IP")
+                return False
+            return self.add_record(domain, name, "A", ip_addr, ttl)
+        except Exception as e:
+            print(f"Error retrieving Tailscale IP: {e}")
+            return False
     
     def setup_gitlab_records(self, domain: str = "doofus.co", gitlab_ip: str = "10.203.3.60") -> bool:
         """Setup DNS records for GitLab deployment"""
@@ -149,6 +163,7 @@ def main():
         print("  list-zones")
         print("  setup-gitlab <domain> <ip>")
         print("  add-record <domain> <name> <type> <value>")
+        print("  register-tailscale <domain> <name>")
         return
     
     # Initialize DNS client
@@ -178,6 +193,13 @@ def main():
             return
         domain, name, record_type, value = sys.argv[2:6]
         dns.add_record(domain, name, record_type, value)
+
+    elif command == "register-tailscale":
+        if len(sys.argv) < 4:
+            print("Usage: register-tailscale <domain> <name>")
+            return
+        domain, name = sys.argv[2:4]
+        dns.add_tailscale_record(domain, name)
     
     else:
         print(f"Unknown command: {command}")
