@@ -48,6 +48,21 @@ ssh -F ~/.ssh/config-proxmox ansible@socrates
 ansible-config dump | grep -E '(remote_user|ssh_args|collections_path)'
 ```
 
+### Terraform Infrastructure Deployment
+```bash
+# Deploy IaC services VM with GitLab (from terraform/gitlab/)
+terraform init
+terraform plan
+terraform apply
+
+# Check VM status
+terraform show
+terraform output
+
+# Destroy infrastructure (if needed)
+terraform destroy
+```
+
 ### Testing and Validation
 ```bash
 # Test connectivity to all hosts
@@ -137,12 +152,19 @@ ansible-playbook site.yml -v --tags "docker"
 - **kellen**: Interactive user with sudo (password required)
 - **tinker**: Automation user with NOPASSWD sudo for Ansible
 - **ansible**: Default remote_user set in ansible.cfg
+- **iac**: Infrastructure services user for GitLab VM (created by Terraform)
+
+### Critical Security Requirements
+- **NEVER USE HARDCODED PASSWORDS** - All secrets must use Ansible Vault
+- **Vault Pattern**: Use `{{ vault_variable | default(lookup('password', '/dev/null length=20 chars=ascii_letters,digits')) }}`
+- **Secrets Documentation**: See SECRETS-MANAGEMENT.md for complete security implementation
 
 ### Security Features
 - SSH hardening (disable root login, password auth)
 - Public key authentication only
 - UFW firewall rules and fail2ban
 - Secure SSH timeouts and connection settings
+- Ansible Vault encryption for all sensitive data
 
 ## Development Patterns
 
@@ -217,3 +239,52 @@ ansible ai_workers --list-hosts
 - Pipelining enabled for faster execution
 - 10 parallel forks configured
 - Control persist for SSH connection reuse
+
+## Infrastructure Deployment Options
+
+### Option 1: Terraform + Ansible (Recommended for GitLab)
+```bash
+# 1. Deploy VM infrastructure with Terraform
+cd terraform/gitlab
+terraform init && terraform apply
+
+# 2. Configure services with Ansible
+cd ../../ansible-infrastructure
+ansible-playbook playbooks/deployment/gitlab-stack.yml
+```
+
+### Option 2: Pure Ansible (For other services)
+```bash
+# Direct deployment of services on existing hosts
+cd ansible-infrastructure
+ansible-playbook playbooks/deployment/technitium-dns-container.yml
+ansible-playbook playbooks/deployment/docker-setup.yml
+```
+
+## Service Access Patterns
+
+### GitLab Access (Terraform deployed)
+- **External**: https://gitlab.doofus.co
+- **Tailscale**: https://gitlab.rawls.ts.net  
+- **SSH Git**: `git clone git@gitlab.doofus.co:2222/user/repo.git`
+- **VM SSH**: `ssh iac@10.203.3.60`
+
+### DNS Server Access (Ansible deployed)
+- **Web Interface**: http://rseau:5380
+- **API**: http://rseau:5380/api/
+- **SSH**: `ssh ansible@rseau`
+
+## Phase-based Deployment
+
+### Phase 1: Core Services ✅
+- GitLab CE with Caddy reverse proxy
+- Technitium DNS server
+- Basic security hardening
+
+### Phase 2: Enhanced Services
+- Semaphore UI for Ansible management
+- Extended monitoring with Prometheus
+
+### Phase 3: Advanced Orchestration
+- Kestra workflow engine
+- Kubernetes migration preparation

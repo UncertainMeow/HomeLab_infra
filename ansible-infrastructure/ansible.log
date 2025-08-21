@@ -44,3 +44,37 @@ The offending line appears to be:
   |  |--rawls
   |--@monitoring:
 2025-08-20 06:05:18,880 p=9791 u=kellen n=ansible INFO| playbook: /Users/kellen/1-Projects/AI/HomeLab_infra/ansible-infrastructure/site.yml
+2025-08-21 03:46:18,079 p=76023 u=kellen n=ansible INFO| [DEPRECATION WARNING]: community.general.yaml has been deprecated. The plugin 
+has been superseded by the the option `result_format=yaml` in callback plugin 
+ansible.builtin.default from ansible-core 2.13 onwards. This feature will be 
+removed from community.general in version 12.0.0. Deprecation warnings can be 
+disabled by setting deprecation_warnings=False in ansible.cfg.
+2025-08-21 03:46:18,126 p=76023 u=kellen n=ansible INFO| PLAY [Ansible Ad-Hoc] **********************************************************
+2025-08-21 03:46:18,129 p=76023 u=kellen n=ansible ERROR| ERROR! Attempting to decrypt but no vault secrets found
+2025-08-21 03:55:43,677 p=79594 u=kellen n=ansible ERROR| ERROR! Decryption failed (no vault secrets were found that could decrypt) on /Users/kellen/code/UncertainMeow/HomeLab_infra/ansible-infrastructure/inventory/group_vars/all/vault.yml for /Users/kellen/code/UncertainMeow/HomeLab_infra/ansible-infrastructure/inventory/group_vars/all/vault.yml
+2025-08-21 03:56:05,410 p=80065 u=kellen n=ansible INFO| [DEPRECATION WARNING]: community.general.yaml has been deprecated. The plugin 
+has been superseded by the the option `result_format=yaml` in callback plugin 
+ansible.builtin.default from ansible-core 2.13 onwards. This feature will be 
+removed from community.general in version 12.0.0. Deprecation warnings can be 
+disabled by setting deprecation_warnings=False in ansible.cfg.
+2025-08-21 03:56:05,469 p=80065 u=kellen n=ansible INFO| PLAY [Ansible Ad-Hoc] **********************************************************
+2025-08-21 03:56:05,478 p=80065 u=kellen n=ansible INFO| TASK [ping] ********************************************************************
+2025-08-21 03:56:05,738 p=80065 u=kellen n=ansible INFO| fatal: [rawls]: UNREACHABLE! => changed=false 
+  msg: |-
+    Data could not be sent to remote host "10.203.3.47". Make sure this host can be reached over ssh: Warning: Permanently added '10.203.3.47' (ED25519) to the list of known hosts.
+    ansible@10.203.3.47: Permission denied (publickey,password).
+  unreachable: true
+2025-08-21 03:56:05,765 p=80065 u=kellen n=ansible INFO| fatal: [socrates]: UNREACHABLE! => changed=false 
+  msg: |-
+    Data could not be sent to remote host "10.203.3.42". Make sure this host can be reached over ssh: Warning: Permanently added '10.203.3.42' (ED25519) to the list of known hosts.
+    ansible@10.203.3.42: Permission denied (publickey).
+  unreachable: true
+2025-08-21 03:56:05,766 p=80065 u=kellen n=ansible INFO| fatal: [rseau]: UNREACHABLE! => changed=false 
+  msg: |-
+    Data could not be sent to remote host "10.203.1.2". Make sure this host can be reached over ssh: Warning: Permanently added '10.203.1.2' (ED25519) to the list of known hosts.
+    ansible@10.203.1.2: Permission denied (publickey,password).
+  unreachable: true
+2025-08-21 03:56:05,766 p=80065 u=kellen n=ansible INFO| PLAY RECAP *********************************************************************
+2025-08-21 03:56:05,767 p=80065 u=kellen n=ansible INFO| rawls                      : ok=0    changed=0    unreachable=1    failed=0    skipped=0    rescued=0    ignored=0   
+2025-08-21 03:56:05,767 p=80065 u=kellen n=ansible INFO| rseau                      : ok=0    changed=0    unreachable=1    failed=0    skipped=0    rescued=0    ignored=0   
+2025-08-21 03:56:05,767 p=80065 u=kellen n=ansible INFO| socrates                   : ok=0    changed=0    unreachable=1    failed=0    skipped=0    rescued=0    ignored=0   

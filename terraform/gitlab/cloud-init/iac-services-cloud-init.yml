@@ -1,0 +1,251 @@
+#cloud-config
+# Cloud-init configuration for IaC Services VM (GitLab + future Semaphore/Kestra)
+# Includes Docker, Caddy, Tailscale integration
+
+# Create iac user for service management
+users:
+  - name: iac
+    groups: [adm, cdrom, dip, plugdev, lxd, sudo, docker]
+    shell: /bin/bash
+    sudo: ['ALL=(ALL) NOPASSWD:ALL']
+    ssh_authorized_keys:
+      - ${ssh_public_key}
+
+# System packages required
+packages:
+  - apt-transport-https
+  - ca-certificates
+  - curl
+  - gnupg
+  - lsb-release
+  - git
+  - htop
+  - vim
+  - ufw
+  - fail2ban
+
+# Write configuration files
+write_files:
+  # Caddy configuration with Tailscale magic domains
+  - path: /home/iac/Caddyfile
+    owner: iac:iac
+    permissions: '0644'
+    content: |
+      # Phase 1: GitLab only
+      gitlab.doofus.co {
+        reverse_proxy gitlab:80
+      }
+      
+      gitlab.rawls.ts.net {
+        reverse_proxy gitlab:80
+      }
+      
+      # Phase 2: Uncomment for Semaphore
+      # semaphore.doofus.co {
+      #   reverse_proxy semaphore:3000
+      # }
+      # 
+      # semaphore.rawls.ts.net {
+      #   reverse_proxy semaphore:3000
+      # }
+      
+      # Phase 3: Uncomment for Kestra
+      # kestra.doofus.co {
+      #   reverse_proxy kestra:8080
+      # }
+      # 
+      # kestra.rawls.ts.net {
+      #   reverse_proxy kestra:8080
+      # }
+
+  # Docker Compose - Phase 1: GitLab + Caddy
+  - path: /home/iac/docker-compose.yml
+    owner: iac:iac
+    permissions: '0644'
+    content: |
+      version: '3.8'
+      
+      services:
+        # Caddy reverse proxy with automatic HTTPS
+        caddy:
+          image: caddy:2-alpine
+          container_name: caddy
+          restart: unless-stopped
+          ports:
+            - "80:80"
+            - "443:443"
+          volumes:
+            - ./Caddyfile:/etc/caddy/Caddyfile:ro
+            - caddy_data:/data
+            - caddy_config:/config
+          networks:
+            - iac-network
+        
+        # GitLab CE - Phase 1
+        gitlab:
+          image: gitlab/gitlab-ce:latest
+          container_name: gitlab
+          restart: unless-stopped
+          hostname: 'gitlab.doofus.co'
+          environment:
+            GITLAB_OMNIBUS_CONFIG: |
+              external_url 'https://gitlab.doofus.co'
+              gitlab_rails['initial_root_password'] = '${gitlab_initial_password}'
+              gitlab_rails['gitlab_shell_ssh_port'] = 2222
+              # Trust Caddy reverse proxy
+              nginx['listen_port'] = 80
+              nginx['listen_https'] = false
+              nginx['proxy_set_headers'] = {
+                "Host" => "$$http_host",
+                "X-Real-IP" => "$$remote_addr",
+                "X-Forwarded-For" => "$$proxy_add_x_forwarded_for",
+                "X-Forwarded-Proto" => "https",
+                "X-Forwarded-Ssl" => "on"
+              }
+          ports:
+            - '2222:22'  # GitLab SSH
+          volumes:
+            - gitlab_config:/etc/gitlab
+            - gitlab_logs:/var/log/gitlab
+            - gitlab_data:/var/opt/gitlab
+          networks:
+            - iac-network
+          shm_size: '256m'
+        
+        # Phase 2: Uncomment for Semaphore
+        # semaphore:
+        #   image: semaphoreui/semaphore:latest
+        #   container_name: semaphore
+        #   restart: unless-stopped
+        #   ports:
+        #     - "3000:3000"
+        #   environment:
+        #     SEMAPHORE_DB_DIALECT: bolt
+        #     SEMAPHORE_ADMIN_PASSWORD: ${semaphore_admin_password}
+        #     SEMAPHORE_ADMIN_NAME: admin
+        #     SEMAPHORE_ADMIN_EMAIL: admin@doofus.co
+        #     SEMAPHORE_ADMIN: admin
+        #     SEMAPHORE_ACCESS_KEY_ENCRYPTION: ${semaphore_access_key}
+        #   volumes:
+        #     - semaphore_data:/etc/semaphore
+        #   networks:
+        #     - iac-network
+        
+        # Phase 3: Uncomment for Kestra  
+        # postgres:
+        #   image: postgres:15
+        #   container_name: kestra-postgres
+        #   restart: unless-stopped
+        #   environment:
+        #     POSTGRES_DB: kestra
+        #     POSTGRES_USER: kestra
+        #     POSTGRES_PASSWORD: ${kestra_db_password}
+        #   volumes:
+        #     - postgres_data:/var/lib/postgresql/data
+        #   networks:
+        #     - iac-network
+        # 
+        # kestra:
+        #   image: kestra/kestra:latest
+        #   container_name: kestra
+        #   restart: unless-stopped
+        #   ports:
+        #     - "8080:8080"
+        #   environment:
+        #     KESTRA_CONFIGURATION: |
+        #       datasources:
+        #         postgres:
+        #           url: jdbc:postgresql://postgres:5432/kestra
+        #           driverClassName: org.postgresql.Driver
+        #           username: kestra
+        #           password: ${kestra_db_password}
+        #   depends_on:
+        #     - postgres
+        #   networks:
+        #     - iac-network
+      
+      volumes:
+        caddy_data:
+        caddy_config:
+        gitlab_config:
+        gitlab_logs:
+        gitlab_data:
+        # semaphore_data:  # Uncomment for Phase 2
+        # postgres_data:   # Uncomment for Phase 3
+      
+      networks:
+        iac-network:
+          driver: bridge
+
+  # Tailscale installation script
+  - path: /home/iac/install-tailscale.sh
+    owner: iac:iac
+    permissions: '0755'
+    content: |
+      #!/bin/bash
+      # Install Tailscale and join tailnet
+      curl -fsSL https://tailscale.com/install.sh | sh
+      
+      # Start Tailscale and authenticate
+      sudo tailscale up --auth-key=${tailscale_auth_key} --hostname=rawls --advertise-tags=tag:homelab
+
+  # Environment file for secrets
+  - path: /home/iac/.env
+    owner: iac:iac
+    permissions: '0600'
+    content: |
+      # GitLab Configuration
+      GITLAB_INITIAL_PASSWORD=${gitlab_initial_password}
+      
+      # Phase 2: Semaphore (uncomment when ready)
+      # SEMAPHORE_ADMIN_PASSWORD=${semaphore_admin_password}
+      # SEMAPHORE_ACCESS_KEY=${semaphore_access_key}
+      
+      # Phase 3: Kestra (uncomment when ready)
+      # KESTRA_DB_PASSWORD=${kestra_db_password}
+
+# Commands to run after boot
+runcmd:
+  # Update system
+  - apt-get update && apt-get upgrade -y
+  
+  # Install Docker
+  - curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+  - echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+  - apt-get update
+  - apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+  
+  # Enable Docker service
+  - systemctl enable docker
+  - systemctl start docker
+  
+  # Add iac user to docker group
+  - usermod -aG docker iac
+  
+  # Install Tailscale
+  - su - iac -c '/home/iac/install-tailscale.sh'
+  
+  # Configure UFW firewall
+  - ufw default deny incoming
+  - ufw default allow outgoing
+  - ufw allow ssh
+  - ufw allow 80/tcp
+  - ufw allow 443/tcp
+  - ufw allow 2222/tcp
+  - ufw --force enable
+  
+  # Start services
+  - cd /home/iac && docker compose up -d
+  
+  # Set up log rotation for Docker
+  - echo '{"log-driver":"json-file","log-opts":{"max-size":"10m","max-file":"3"}}' > /etc/docker/daemon.json
+  - systemctl restart docker
+
+# Set hostname
+hostname: iac-services
+fqdn: iac-services.doofus.co
+
+# Reboot after setup
+power_state:
+  mode: reboot
+  delay: 300

@@ -6,7 +6,7 @@
   
   vars:
     # SSH public key for ansible user (get from 1Password)
-    ansible_ssh_public_key: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICsDyKQ8SMOJbzWGBiEf0K+uqMrBxTiDceqT3mMNgsSZ cogito"
+    ansible_ssh_public_key: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIA7ppWDUw6solSUXzNJQJZByeqihMHMGoIMeUsgTaHM"
     
     system_users:
       - name: ansible

@@ -1,0 +1,29 @@
+# Example terraform.tfvars for IaC Services deployment
+# Copy to terraform.tfvars and fill in your values
+
+# Proxmox Configuration
+proxmox_password = "your_proxmox_root_password"
+
+# Network Configuration
+iac_services_ip = "10.203.3.60"  # Adjust if IP conflicts
+tailscale_ip = ""  # Will be filled after Tailscale joins
+
+# Cloudflare Configuration
+cloudflare_api_token = "your_cloudflare_api_token"
+cloudflare_zone_id = "your_doofus_co_zone_id"
+
+# SSH Configuration (get from: ssh-add -L)
+ssh_public_key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI... your-key-comment"
+
+# Tailscale Configuration
+tailscale_auth_key = "tskey-auth-your-tailscale-auth-key"
+
+# Service Passwords (generate secure passwords)
+gitlab_initial_password = "your_secure_gitlab_password"
+
+# Phase 2: Uncomment when adding Semaphore
+# semaphore_admin_password = "your_secure_semaphore_password"
+# semaphore_access_key = "your_semaphore_access_key"
+
+# Phase 3: Uncomment when adding Kestra
+# kestra_db_password = "your_secure_kestra_db_password"
