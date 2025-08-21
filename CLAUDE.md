@@ -240,25 +240,52 @@ ansible ai_workers --list-hosts
 - 10 parallel forks configured
 - Control persist for SSH connection reuse
 
-## Infrastructure Deployment Options
+## GitLab Infrastructure Deployment
 
-### Option 1: Terraform + Ansible (Recommended for GitLab)
+**ALWAYS USE TERRAFORM FOR GITLAB DEPLOYMENT** - Do not manually create VMs.
+
+### Prerequisites (Critical SSH Fix)
 ```bash
-# 1. Deploy VM infrastructure with Terraform
-cd terraform/gitlab
-terraform init && terraform apply
+# IMPORTANT: SSH connectivity was broken by dotfiles XDG compliance
+# This MUST be resolved before Terraform will work:
+# Either disable IdentitiesOnly in SSH config OR use this flag:
+ssh -o IdentitiesOnly=no [target]
 
-# 2. Configure services with Ansible
-cd ../../ansible-infrastructure
-ansible-playbook playbooks/deployment/gitlab-stack.yml
+# Verify 1Password SSH agent is working:
+ssh-add -l
+
+# Test SSH connectivity to Proxmox:
+ssh -F ~/.ssh/config-proxmox -o IdentitiesOnly=no root@socrates
 ```
 
-### Option 2: Pure Ansible (For other services)
+### Standard Terraform Deployment
 ```bash
-# Direct deployment of services on existing hosts
+# 1. Deploy VM infrastructure with Terraform (PRIMARY METHOD)
+cd terraform/gitlab
+terraform init
+terraform plan
+terraform apply
+
+# 2. Services are auto-configured via cloud-init
+# GitLab stack will be available at:
+# - https://gitlab.doofus.co (external)
+# - https://gitlab.rawls.ts.net (Tailscale)
+```
+
+### Ansible-Only Deployment (For other services)
+```bash
+# Use for non-GitLab services on existing hosts
 cd ansible-infrastructure
 ansible-playbook playbooks/deployment/technitium-dns-container.yml
 ansible-playbook playbooks/deployment/docker-setup.yml
+```
+
+### Manual Deployment (EMERGENCY ONLY)
+⚠️  **Only use if Terraform fails completely**
+```bash
+# Last resort - creates "jank" deployment that should be torn down
+# and replaced with proper Terraform deployment
+echo "Use Terraform instead - manual deployment creates technical debt"
 ```
 
 ## Service Access Patterns
@@ -267,7 +294,14 @@ ansible-playbook playbooks/deployment/docker-setup.yml
 - **External**: https://gitlab.doofus.co
 - **Tailscale**: https://gitlab.rawls.ts.net  
 - **SSH Git**: `git clone git@gitlab.doofus.co:2222/user/repo.git`
-- **VM SSH**: `ssh iac@10.203.3.60`
+- **VM SSH**: `ssh iac@[terraform-assigned-ip]` (check terraform output)
+
+### Teardown Manual Instances
+```bash
+# Remove any manual "jank" deployments before using Terraform
+ssh -o IdentitiesOnly=no ansible@10.203.3.60 'sudo docker compose -f /opt/gitlab-stack/docker-compose.yml down'
+# Then delete VM from Proxmox web interface
+```
 
 ### DNS Server Access (Ansible deployed)
 - **Web Interface**: http://rseau:5380

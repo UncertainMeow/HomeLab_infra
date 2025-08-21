@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "WebFetch(domain:forum.proxmox.com)",
+      "Bash(mkdir:*)",
+      "Bash(python3:*)",
+      "Bash(ansible:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
