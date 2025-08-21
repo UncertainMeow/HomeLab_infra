@@ -2,6 +2,12 @@
 
 All notable changes to the HomeLab Infrastructure project will be documented in this file.
 
+## [Unreleased]
+### Added
+- Tailscale role: optional DNS server configuration via `tailscale_dns_servers`
+- DNS zone setup script: openwebui record and corrected htpc IP
+- Playbook: `docker-compose-nas.yml` to deploy NAS stack on htpc
+
 ## [2.0.0] - 2025-08-20
 
 ### 🚀 Major Features Added
