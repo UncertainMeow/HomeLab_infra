@@ -1,0 +1,15 @@
+version: "3.8"
+services:
+  samba:
+    image: ghcr.io/linuxserver/samba
+    container_name: samba
+    restart: unless-stopped
+    environment:
+      - PUID={{ nas_puid | default(1000) }}
+      - PGID={{ nas_pgid | default(1000) }}
+      - TZ={{ nas_timezone | default('UTC') }}
+    volumes:
+      - {{ nas_data_path | default('/srv/nas') }}:/data
+    ports:
+      - "139:139"
+      - "445:445"
