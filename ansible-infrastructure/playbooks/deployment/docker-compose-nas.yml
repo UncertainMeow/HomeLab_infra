@@ -1,0 +1,34 @@
+---
+- name: Deploy Docker Compose NAS stack
+  hosts: htpc
+  become: true
+  vars:
+    nas_repo: https://github.com/AdrienPoupa/docker-compose-nas.git
+    nas_dir: /opt/docker-compose-nas
+  tasks:
+    - name: Ensure git is installed
+      ansible.builtin.apt:
+        name: git
+        state: present
+        update_cache: true
+
+    - name: Clone Docker Compose NAS repository
+      ansible.builtin.git:
+        repo: "{{ nas_repo }}"
+        dest: "{{ nas_dir }}"
+        version: main
+      notify: Restart NAS stack
+
+    - name: Start NAS stack
+      ansible.builtin.command: docker compose up -d
+      args:
+        chdir: "{{ nas_dir }}"
+      register: nas_up
+      changed_when: "'Creating' in nas_up.stdout or 'Recreating' in nas_up.stdout"
+
+  handlers:
+    - name: Restart NAS stack
+      ansible.builtin.command: docker compose up -d
+      args:
+        chdir: "{{ nas_dir }}"
+      changed_when: false

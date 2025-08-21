@@ -2,41 +2,43 @@
 # Configure Tailscale settings
 
 - name: Get current Tailscale status
-  command: tailscale status --json
+  ansible.builtin.command: tailscale status --json
   register: tailscale_current_status
   failed_when: false
   changed_when: false
 
 - name: Parse current status
-  set_fact:
+  ansible.builtin.set_fact:
     current_tailscale_config: "{{ tailscale_current_status.stdout | from_json if tailscale_current_status.rc == 0 else {} }}"
 
 - name: Configure subnet routes (if specified)
-  command: >
+  ansible.builtin.command: >
     tailscale up
     --advertise-routes={{ tailscale_subnet_routes | join(',') }}
     {% if tailscale_accept_routes %}
     --accept-routes
     {% endif %}
-  when: 
+  when:
     - tailscale_subnet_routes | length > 0
     - current_tailscale_config.get('BackendState') == 'Running'
-  become: yes
+  become: true
+  changed_when: false
 
 - name: Configure as exit node (if enabled)
-  command: >
+  ansible.builtin.command: >
     tailscale up
     --advertise-exit-node
     {% if tailscale_exit_node_allow_lan_access %}
     --exit-node-allow-lan-access
     {% endif %}
-  when: 
+  when:
     - tailscale_exit_node
     - current_tailscale_config.get('BackendState') == 'Running'
-  become: yes
+  become: true
+  changed_when: false
 
 - name: Set Tailscale preferences
-  command: >
+  ansible.builtin.command: >
     tailscale set
     {% if tailscale_shields_up %}
     --shields-up
@@ -49,11 +51,22 @@
     --ssh=false
     {% endif %}
   when: current_tailscale_config.get('BackendState') == 'Running'
-  become: yes
+  become: true
   register: tailscale_prefs_result
   changed_when: false  # These commands don't indicate if changes were made
 
+- name: Configure DNS servers
+  ansible.builtin.command: >
+    tailscale set
+    --dns={{ tailscale_dns_servers | join(',') }}
+  when:
+    - tailscale_dns_servers | length > 0
+    - current_tailscale_config.get('BackendState') == 'Running'
+  become: true
+  register: tailscale_dns_result
+  changed_when: false
+
 - name: Get final Tailscale status
-  command: tailscale status
+  ansible.builtin.command: tailscale status
   register: tailscale_final_status
   changed_when: false

@@ -80,9 +80,10 @@ Internal → DNS Server → Caddy → Services
 
 **Playbooks:**
 - **`playbooks/deployment/gitlab-stack.yml`** - Complete GitLab CE deployment with Caddy
-- **`playbooks/deployment/technitium-dns-container.yml`** - DNS server deployment  
+- **`playbooks/deployment/technitium-dns-container.yml`** - DNS server deployment
 - **`playbooks/setup/initial-setup.yml`** - Server hardening and user management
 - **`playbooks/maintenance/hardware-assessment.yml`** - AI/ML hardware analysis
+- **`playbooks/deployment/docker-compose-nas.yml`** - Deploy Docker Compose NAS stack on htpc
 
 **Roles:**
 - **`roles/gitlab_stack/`** - Comprehensive GitLab + Caddy + Tailscale integration
